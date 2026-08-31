@@ -52,6 +52,7 @@ import {
   X,
   RotateCcw,
   Upload,
+  LogOut,
 } from "lucide-react";
 import { useAtsocParameters } from "@/lib/use-atsoc-parameters";
 import {
@@ -89,6 +90,12 @@ import {
 } from "@/lib/atsoc-control";
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
 import { exportReportExcel, exportReportPdf } from "@/lib/report-export";
+import {
+  initializeWorkspace,
+  loadWorkspace,
+  persistWorkspaceResource,
+  type WorkspacePayload,
+} from "@/lib/workspace-client";
 
 type Key =
   | "dashboard"
@@ -3731,7 +3738,7 @@ function Pricing({
         : "Proposta enviada para follow-up comercial",
     );
   };
-  const requestApproval = () => {
+  const requestApproval = async () => {
     if (!providerName.trim() || !seller.trim() || !discountReason.trim()) {
       open("Informe cliente, vendedor e motivo para solicitar aprovação");
       return;
@@ -3745,14 +3752,19 @@ function Pricing({
       date: new Date().toISOString(),
       status: "pending",
     };
-    const requests = JSON.parse(
-      localStorage.getItem("atsoc-approval-requests") || "[]",
-    );
-    localStorage.setItem(
-      "atsoc-approval-requests",
-      JSON.stringify([request, ...requests].slice(0, 100)),
-    );
-    open("Solicitação enviada aos sócios");
+    try {
+      const current = await loadWorkspace();
+      const requests = Array.isArray(current.data?.approvalRequests)
+        ? current.data.approvalRequests
+        : [];
+      await persistWorkspaceResource(
+        "approvalRequests",
+        [request, ...requests].slice(0, 100),
+      );
+      open("Solicitação enviada aos sócios");
+    } catch {
+      open("Não foi possível enviar a solicitação. Tente novamente.");
+    }
   };
   const upd = (i: number, k: string, v: any) =>
     setSch((s) => s.map((d, j) => (j === i ? { ...d, [k]: v } : d)));
@@ -7171,7 +7183,7 @@ function Modal({ state, close }: any) {
 }
 
 export default function Home() {
-  const { parameters, update, reset } = useAtsocParameters();
+  const { parameters, update: updateParametersLocal } = useAtsocParameters();
   const [page, setPage] = useState<Key>("dashboard"),
     [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
@@ -7190,79 +7202,68 @@ export default function Home() {
     [searchQuery, setSearchQuery] = useState(""),
     [searchOpen, setSearchOpen] = useState(false),
     [notificationsOpen, setNotificationsOpen] = useState(false),
+    [workspaceUser, setWorkspaceUser] = useState<{ name?: string; email?: string; role?: string }>({}),
+    [loadError, setLoadError] = useState(""),
     [hydrated, setHydrated] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const persist = (resource: string, value: unknown) => {
+    void persistWorkspaceResource(resource, value).catch(() =>
+      setLoadError("Uma alteração não foi salva. Verifique a conexão e tente novamente."),
+    );
+  };
+  const update = (next: AtsocParameters) => {
+    updateParametersLocal(next);
+    if (hydrated) persist("parameters", next);
+  };
+  const reset = () => update(DEFAULT_PARAMETERS);
   useEffect(() => {
     const saved = localStorage.getItem("atsoc-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
-    try {
-      // One-time migration: version 2 removes every record created during the
-      // prototype/testing phase. Theme and company logo are intentionally kept.
-      const cleanVersion = "atsoc-vercel-initial-data-v1";
-      if (!localStorage.getItem(cleanVersion)) {
-        const initialReceivables = INITIAL_CLIENT_RECORDS.flatMap((client) =>
-          createClientReceivables(client),
-        );
-        [
-          "atsoc-control-parameters-v1",
-          "atsoc-financial-entries-v1",
-          "atsoc-initial-balance-v1",
-          "atsoc-client-records-v1",
-          "atsoc-recurring-accounts-v1",
-          "atsoc-team-members-v1",
-          "atsoc-quote-records-v1",
-          "atsoc-scenario-records-v1",
-          "atsoc-discount-audit",
-          "atsoc-approval-requests",
-        ].forEach((key) => localStorage.removeItem(key));
-        update(DEFAULT_PARAMETERS);
-        localStorage.setItem(
-          "atsoc-client-records-v1",
-          JSON.stringify(INITIAL_CLIENT_RECORDS),
-        );
-        localStorage.setItem(
-          "atsoc-team-members-v1",
-          JSON.stringify(INITIAL_TEAM_MEMBERS),
-        );
-        localStorage.setItem(
-          "atsoc-financial-entries-v1",
-          JSON.stringify(initialReceivables),
-        );
-        localStorage.setItem(cleanVersion, "done");
-        setFinancialEntries(initialReceivables);
-        setRecurringRulesState([]);
-        setClientRecords(INITIAL_CLIENT_RECORDS);
-        setTeamMembersState(INITIAL_TEAM_MEMBERS);
-        setQuoteRecordsState([]);
-        setScenarioRecordsState([]);
-        setInitialBalanceState(0);
+    const applyWorkspace = (data: WorkspacePayload) => {
+      updateParametersLocal({
+        ...DEFAULT_PARAMETERS,
+        ...((data.parameters || {}) as Partial<AtsocParameters>),
+      });
+      setFinancialEntries((data.financialEntries || []) as FinancialEntry[]);
+      setRecurringRulesState((data.recurringRules || []) as RecurringAccountRule[]);
+      setTeamMembersState((data.teamMembers || INITIAL_TEAM_MEMBERS) as TeamMember[]);
+      setClientRecords((data.clientRecords || INITIAL_CLIENT_RECORDS) as ClientRecord[]);
+      setQuoteRecordsState((data.quoteRecords || []) as QuoteRecord[]);
+      setScenarioRecordsState((data.scenarioRecords || []) as ScenarioRecord[]);
+      setCompanyLogoState(typeof data.companyLogo === "string" ? data.companyLogo : "");
+      setInitialBalanceState(Number(data.initialBalance) || 0);
+    };
+    const start = async () => {
+      try {
+        const loaded = await loadWorkspace();
+        setWorkspaceUser({ ...loaded.user, role: loaded.role });
+        let data = loaded.data;
+        if (!data) {
+          const seed: WorkspacePayload = {
+            parameters: DEFAULT_PARAMETERS,
+            financialEntries: INITIAL_CLIENT_RECORDS.flatMap((client) =>
+              createClientReceivables(client),
+            ),
+            recurringRules: [],
+            teamMembers: INITIAL_TEAM_MEMBERS,
+            clientRecords: INITIAL_CLIENT_RECORDS,
+            quoteRecords: [],
+            scenarioRecords: [],
+            companyLogo: "",
+            initialBalance: 0,
+            approvalRequests: [],
+            discountAudit: [],
+          };
+          data = (await initializeWorkspace(seed)).data || seed;
+        }
+        applyWorkspace(data);
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
+      } finally {
         setHydrated(true);
-        return;
       }
-      const savedEntries = localStorage.getItem("atsoc-financial-entries-v1");
-      const savedBalance = localStorage.getItem("atsoc-initial-balance-v1");
-      const savedClients = localStorage.getItem("atsoc-client-records-v1");
-      const savedRecurringRules = localStorage.getItem(
-        "atsoc-recurring-accounts-v1",
-      );
-      const savedTeam = localStorage.getItem("atsoc-team-members-v1");
-      const savedQuotes = localStorage.getItem("atsoc-quote-records-v1");
-      const savedScenarios = localStorage.getItem("atsoc-scenario-records-v1");
-      const savedLogo = localStorage.getItem("atsoc-company-logo-v1");
-      if (savedEntries) setFinancialEntries(JSON.parse(savedEntries));
-      if (savedBalance) setInitialBalanceState(Number(savedBalance) || 0);
-      if (savedClients) setClientRecords(JSON.parse(savedClients));
-      if (savedRecurringRules)
-        setRecurringRulesState(JSON.parse(savedRecurringRules));
-      if (savedTeam) setTeamMembersState(JSON.parse(savedTeam));
-      if (savedQuotes) {
-        const parsedQuotes = JSON.parse(savedQuotes);
-        setQuoteRecordsState(Array.isArray(parsedQuotes) ? parsedQuotes : []);
-      }
-      if (savedScenarios) setScenarioRecordsState(JSON.parse(savedScenarios));
-      if (savedLogo?.startsWith("data:image/")) setCompanyLogoState(savedLogo);
-    } catch {}
-    setHydrated(true);
+    };
+    void start();
   }, []);
   useEffect(() => {
     if (!hydrated) return;
@@ -7284,7 +7285,7 @@ export default function Home() {
         ...current.filter((rule) => !rule.id.startsWith("cost-")),
         ...costRules,
       ];
-      localStorage.setItem("atsoc-recurring-accounts-v1", JSON.stringify(next));
+      persist("recurringRules", next);
       return next;
     });
     setFinancialEntries((current) => {
@@ -7300,7 +7301,7 @@ export default function Home() {
         ...preserved,
         ...generated.filter((entry) => !existingIds.has(entry.id)),
       ];
-      localStorage.setItem("atsoc-financial-entries-v1", JSON.stringify(next));
+      persist("financialEntries", next);
       return next;
     });
   }, [hydrated, parameters.fixedCosts]);
@@ -7339,7 +7340,7 @@ export default function Home() {
     );
     setRecurringRulesState((current) => {
       const next = current.filter((rule) => !idMap.has(rule.id));
-      localStorage.setItem("atsoc-recurring-accounts-v1", JSON.stringify(next));
+      persist("recurringRules", next);
       return next;
     });
     setFinancialEntries((current) => {
@@ -7362,7 +7363,7 @@ export default function Home() {
           ];
         return [];
       });
-      localStorage.setItem("atsoc-financial-entries-v1", JSON.stringify(next));
+      persist("financialEntries", next);
       return next;
     });
   }, [hydrated, recurringRules, parameters.fixedCosts]);
@@ -7384,7 +7385,7 @@ export default function Home() {
   ) =>
     setFinancialEntries((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-financial-entries-v1", JSON.stringify(next));
+      persist("financialEntries", next);
       return next;
     });
   const updateRecurringRules = (
@@ -7394,19 +7395,19 @@ export default function Home() {
   ) =>
     setRecurringRulesState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-recurring-accounts-v1", JSON.stringify(next));
+      persist("recurringRules", next);
       return next;
     });
   const updateInitialBalance = (value: number) => {
     setInitialBalanceState(value);
-    localStorage.setItem("atsoc-initial-balance-v1", String(value));
+    persist("initialBalance", value);
   };
   const updateClientRecords = (
     updater: ClientRecord[] | ((current: ClientRecord[]) => ClientRecord[]),
   ) =>
     setClientRecords((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-client-records-v1", JSON.stringify(next));
+      persist("clientRecords", next);
       return next;
     });
   const updateTeamMembers = (
@@ -7414,7 +7415,7 @@ export default function Home() {
   ) =>
     setTeamMembersState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-team-members-v1", JSON.stringify(next));
+      persist("teamMembers", next);
       return next;
     });
   const updateQuoteRecords = (
@@ -7422,7 +7423,7 @@ export default function Home() {
   ) =>
     setQuoteRecordsState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-quote-records-v1", JSON.stringify(next));
+      persist("quoteRecords", next);
       return next;
     });
   const updateScenarioRecords = (
@@ -7432,7 +7433,7 @@ export default function Home() {
   ) =>
     setScenarioRecordsState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      localStorage.setItem("atsoc-scenario-records-v1", JSON.stringify(next));
+      persist("scenarioRecords", next);
       return next;
     });
   const toggleTheme = () =>
@@ -7443,8 +7444,7 @@ export default function Home() {
     });
   const updateCompanyLogo = (value: string) => {
     setCompanyLogoState(value);
-    if (value) localStorage.setItem("atsoc-company-logo-v1", value);
-    else localStorage.removeItem("atsoc-company-logo-v1");
+    persist("companyLogo", value);
   };
   const open = (title: string, client = false) => setModal({ title, client });
   const title = menu.find((x) => x[0] === page)![1];
@@ -7644,17 +7644,22 @@ export default function Home() {
             <i />
             <span>
               <b>Sistema operacional</b>
-              <small>Dados demonstrativos</small>
+              <small>Supabase protegido</small>
             </span>
           </div>
           <button onClick={() => open("Perfil do usuário")}>
-            <div className="avatar">VS</div>
+            <div className="avatar">
+              {(workspaceUser.name || workspaceUser.email || "U").slice(0, 2).toUpperCase()}
+            </div>
             <span>
-              <b>Vinicius Scielzo</b>
-              <small>Administrador</small>
+              <b>{workspaceUser.name || workspaceUser.email || "Usuário ATSOC"}</b>
+              <small>{workspaceUser.role || "Acesso autorizado"}</small>
             </span>
             <ChevronDown />
           </button>
+          <form action="/auth/signout" method="post" className="signout-form">
+            <button type="submit" title="Sair do sistema"><LogOut /><span>Sair com segurança</span></button>
+          </form>
         </footer>
       </aside>
       {mobile && <div className="overlay" onClick={() => setMobile(false)} />}
@@ -7782,7 +7787,10 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <div className="content">{content}</div>
+        <div className="content">
+          {loadError && <div className="workspace-error"><AlertTriangle />{loadError}</div>}
+          {!hydrated ? <div className="workspace-loading">Carregando dados protegidos...</div> : content}
+        </div>
       </main>
       {modal && <Modal state={modal} close={() => setModal(null)} />}
     </div>

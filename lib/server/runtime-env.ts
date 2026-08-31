@@ -13,15 +13,15 @@ export function getSupabaseServerEnv(): SupabaseServerEnv {
     throw new Error("Configuração do Supabase acessada fora do servidor.");
   }
   return {
-    url: required("SUPABASE_URL", process.env.SUPABASE_URL).replace(/\/$/, ""),
-    anonKey: required("SUPABASE_ANON_KEY", process.env.SUPABASE_ANON_KEY),
+    url: required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL).replace(/\/$/, ""),
+    anonKey: required("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   };
 }
 
 export function databaseConfigurationStatus() {
   return {
-    supabaseUrlConfigured: Boolean(process.env.SUPABASE_URL),
-    supabaseAnonKeyConfigured: Boolean(process.env.SUPABASE_ANON_KEY),
+    supabaseUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    supabaseAnonKeyConfigured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     encryptionKeyConfigured: Boolean(process.env.ATSOC_ENCRYPTION_KEY),
   };
 }
