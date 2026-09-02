@@ -7644,7 +7644,7 @@ export default function Home() {
             <i />
             <span>
               <b>Sistema operacional</b>
-              <small>Supabase protegido</small>
+              <small>Dados locais protegidos</small>
             </span>
           </div>
           <button onClick={() => open("Perfil do usuário")}>

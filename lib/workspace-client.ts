@@ -1,44 +1,43 @@
 export type WorkspacePayload = Record<string, unknown>;
+const STORAGE_KEY = "atsoc-workspace-local-v1";
 
-async function parseResponse(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as {
-    error?: string;
-    data?: WorkspacePayload | null;
-    role?: string;
-    user?: { id: string; email?: string; name?: string };
-  };
-  if (response.status === 401) {
-    window.location.assign("/login");
-    throw new Error("Sessão expirada.");
+function readWorkspace(): WorkspacePayload | null {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as WorkspacePayload
+      : null;
+  } catch {
+    return null;
   }
-  if (!response.ok) throw new Error(body.error || "Não foi possível acessar os dados.");
-  return body;
+}
+
+function writeWorkspace(data: WorkspacePayload) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    throw new Error("O navegador não conseguiu salvar os dados locais.");
+  }
 }
 
 export async function loadWorkspace() {
-  return parseResponse(
-    await fetch("/api/workspace", { cache: "no-store", credentials: "same-origin" }),
-  );
+  return {
+    data: readWorkspace(),
+    revision: Date.now(),
+    role: "Proprietário",
+    user: { id: "local-owner", email: "vinicius@atsoc.com.br", name: "Vinicius" },
+  };
 }
 
 export async function initializeWorkspace(data: WorkspacePayload) {
-  return parseResponse(
-    await fetch("/api/workspace", {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data }),
-    }),
-  );
+  writeWorkspace(data);
+  return { data, revision: Date.now() };
 }
 
 export async function persistWorkspaceResource(resource: string, value: unknown) {
-  return parseResponse(
-    await fetch("/api/workspace", {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resource, value }),
-    }),
-  );
+  const data = readWorkspace() || {};
+  writeWorkspace({ ...data, [resource]: value });
+  return { revision: Date.now() };
 }

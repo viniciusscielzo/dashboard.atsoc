@@ -2,32 +2,30 @@
 
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("vinicius@atsoc.com.br");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [recovery, setRecovery] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const configured = isSupabaseConfigured();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!configured) return;
     setBusy(true);
     setMessage("");
-    const supabase = createClient();
-    if (recovery) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      setMessage(error ? "Não foi possível enviar o link." : "Link de recuperação enviado. Verifique seu e-mail.");
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMessage("E-mail ou senha inválidos.");
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) setMessage(result.error || "E-mail ou senha inválidos.");
       else window.location.assign("/");
+    } catch {
+      setMessage("Não foi possível entrar. Tente novamente.");
     }
     setBusy(false);
   };
@@ -46,14 +44,12 @@ export default function LoginPage() {
       <section className="auth-form-wrap">
         <form className="auth-form" onSubmit={submit}>
           <small>ATSOC CONTROL</small>
-          <h2>{recovery ? "Recuperar acesso" : "Entrar no sistema"}</h2>
-          <p>{recovery ? "Enviaremos um link seguro para redefinir sua senha." : "Use seu e-mail corporativo e sua senha."}</p>
-          {!configured && <div className="auth-message error">Configure as variáveis do Supabase na Vercel para liberar o acesso.</div>}
+          <h2>Entrar no sistema</h2>
+          <p>Use seu e-mail corporativo e sua senha.</p>
           <label>E-mail<div><Mail /><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div></label>
-          {!recovery && <label>Senha<div><LockKeyhole /><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Mostrar ou ocultar senha">{showPassword ? <EyeOff /> : <Eye />}</button></div></label>}
-          {message && <div className="auth-message">{message}</div>}
-          <button className="auth-submit" disabled={busy || !configured}>{busy ? "Aguarde..." : recovery ? "Enviar link seguro" : "Entrar"}</button>
-          <button className="auth-link" type="button" onClick={() => { setRecovery((value) => !value); setMessage(""); }}>{recovery ? "Voltar para o login" : "Esqueci minha senha"}</button>
+          <label>Senha<div><LockKeyhole /><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Mostrar ou ocultar senha">{showPassword ? <EyeOff /> : <Eye />}</button></div></label>
+          {message && <div className="auth-message error">{message}</div>}
+          <button className="auth-submit" disabled={busy}>{busy ? "Aguarde..." : "Entrar"}</button>
         </form>
       </section>
     </main>

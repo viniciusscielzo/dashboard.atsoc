@@ -1,41 +1,24 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { LOCAL_AUTH_COOKIE, verifyLocalSessionToken } from "@/lib/server/local-auth";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/reset-password", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((item) => path.startsWith(item));
+  const authenticated = verifyLocalSessionToken(
+    request.cookies.get(LOCAL_AUTH_COOKIE)?.value,
+  );
 
-  if (!url || !key) {
-    if (path === "/login" || path === "/api/health") return NextResponse.next();
-    return NextResponse.redirect(new URL("/login?erro=configuracao", request.url));
-  }
-
-  let response = NextResponse.next({ request });
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll: (cookiesToSet) => {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
-      },
-    },
-  });
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user && !isPublic) {
+  if (!authenticated && !isPublic) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", path);
     return NextResponse.redirect(login);
   }
-  if (user && path === "/login") return NextResponse.redirect(new URL("/", request.url));
-  return response;
+  if (authenticated && path === "/login") {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+  return NextResponse.next();
 }
 
 export const config = {

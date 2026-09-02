@@ -1,44 +1,32 @@
-# Segurança e implantação do ATSOC Control
+# Segurança do ATSOC Control — modo local
 
-## Princípios obrigatórios
+## Proteções implementadas
 
-- O navegador nunca recebe `SUPABASE_SERVICE_ROLE_KEY` ou `ATSOC_ENCRYPTION_KEY`.
-- Toda leitura e escrita de dados oficiais deve passar por autenticação e pelas políticas RLS do Supabase.
-- A aplicação deve usar o JWT do usuário nas chamadas ao Supabase; a chave `service_role` fica restrita a migrações e rotinas administrativas isoladas.
-- O estado oficial fica em `workspace_states`, protegido por organização. A logo atual é armazenada dentro desse estado; o bucket privado já está preparado para uma futura migração de arquivos.
-- Logs não podem registrar tokens, documentos, dados financeiros completos ou corpos de requisições.
-- Alterações financeiras, contratuais, de parâmetros e permissões devem gerar trilha de auditoria.
+- Login validado exclusivamente no servidor.
+- Senha armazenada somente como hash derivado com `scrypt` e salt aleatório.
+- Comparação resistente a ataques de temporização.
+- Sessão assinada com validade de sete dias.
+- Cookie de sessão `HttpOnly`, `SameSite=Strict` e `Secure` em produção.
+- Rotas privadas bloqueadas pelo proxy antes de abrir o sistema.
+- Mensagem de login genérica para não revelar qual campo está incorreto.
+- Cabeçalhos de segurança configurados no Next.js.
 
-## Vercel
+## Limites do modo local
 
-1. Conectar o repositório e manter o framework como Next.js.
-2. Cadastrar as variáveis de `.env.example` somente no painel da Vercel.
-3. `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` são configurações públicas do SDK; nunca usar esse prefixo em `service_role` ou segredos internos.
-4. Executar as migrações do diretório `supabase/migrations` antes de liberar usuários.
-5. Configurar domínio HTTPS, proteção de acesso e autenticação Supabase.
+- Os registros ficam no navegador, não em um banco central.
+- Apagar os dados do site apaga os registros locais.
+- Outro navegador, computador ou domínio não recebe automaticamente os dados.
+- Este modo é adequado para uso pessoal em um dispositivo confiável, mas não substitui autenticação centralizada, MFA, RLS e backups para múltiplos usuários.
 
-## Supabase
+## Cuidados para publicação
 
-- Ativar autenticação com MFA para administradores e sócios.
-- Desabilitar cadastro público se os usuários forem convidados internamente.
-- Revisar as políticas RLS após qualquer nova tabela.
-- Manter backups, Point-in-Time Recovery quando disponível e alertas de acesso.
-- Rotacionar chaves imediatamente em caso de suspeita de exposição.
+- Use um repositório GitHub privado.
+- Não compartilhe o ZIP ou o código-fonte publicamente.
+- Publique exclusivamente com HTTPS pela Vercel.
+- Restrinja o acesso físico e o perfil do Windows utilizado para operar o sistema.
+- Não salve senhas no navegador de computadores compartilhados.
+- Para incluir outros usuários, migre autenticação e persistência para Supabase antes de liberar os acessos.
 
-## Estado atual
+## Migração futura para Supabase
 
-- Login, renovação de sessão e recuperação de senha usam Supabase Auth.
-- A rota `/api/workspace` valida a sessão no servidor e não aceita organização enviada pelo navegador.
-- O banco determina a organização pelo vínculo do usuário autenticado.
-- Apenas `owner`, `admin` e `partner` podem ler ou alterar o workspace completo.
-- O navegador não armazena os dados oficiais em `localStorage`.
-- A função de atualização aceita somente recursos explicitamente autorizados e gera revisão e auditoria.
-
-## Checklist antes de produção
-
-- Desabilitar cadastro público e confirmar os Redirect URLs.
-- Ativar MFA para sócios e administradores.
-- Testar RLS com um usuário sem vínculo e com um usuário de outra organização.
-- Habilitar backups e, se disponível no plano, Point-in-Time Recovery.
-- Não enviar `.env.local`, dumps ou chaves para o Git.
-- Conceder os papéis `seller`, `finance` e `collaborator` somente quando as telas específicas desses perfis estiverem liberadas.
+Os arquivos de migração foram preservados, mas estão inativos nesta versão. Antes da migração, configure Supabase Auth, RLS por organização, backups e perfis de acesso. Nunca exponha a chave `service_role` no navegador ou no repositório.
