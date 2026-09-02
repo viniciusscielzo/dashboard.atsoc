@@ -13,7 +13,7 @@ const sign = (payload: string) =>
 
 export function verifyLocalCredentials(email: string, password: string) {
   if (email.trim().toLowerCase() !== LOCAL_AUTH_EMAIL) return false;
-  const candidate = scryptSync(password, PASSWORD_SALT, 64);
+  const candidate = scryptSync(password.trim(), PASSWORD_SALT, 64);
   const expected = Buffer.from(PASSWORD_HASH, "hex");
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }

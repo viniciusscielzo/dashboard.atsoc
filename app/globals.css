@@ -119,6 +119,8 @@ body {
 .auth-link { display: block; margin: 16px auto 0; border: 0; background: transparent; color: #70aefb; cursor: pointer; }
 .auth-message { margin-top: 16px; border: 1px solid #29405e; border-radius: 10px; padding: 11px 13px; color: #b9c9dc; background: #0a1728; }
 .auth-message.error { border-color: #9d3d4d; color: #ff9eaa; }
+.auth-local-status { display: inline-flex; align-items: center; gap: 7px; color: #63d9b5; font-size: 12px; font-weight: 700; }
+.auth-local-status svg { width: 15px; height: 15px; }
 .fatal-error { min-height: 100vh; display: grid; place-items: center; padding: 30px; background: #060b18; color: white; }
 .fatal-error > div { max-width: 560px; padding: 36px; border: 1px solid #263a56; border-radius: 20px; background: #0d1729; }
 .fatal-error small { color: #4b9cff; letter-spacing: .14em; font-weight: 800; }

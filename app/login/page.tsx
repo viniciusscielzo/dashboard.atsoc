@@ -46,6 +46,7 @@ export default function LoginPage() {
           <small>ATSOC CONTROL</small>
           <h2>Entrar no sistema</h2>
           <p>Use seu e-mail corporativo e sua senha.</p>
+          <div className="auth-local-status"><ShieldCheck /> Acesso local ativo</div>
           <label>E-mail<div><Mail /><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div></label>
           <label>Senha<div><LockKeyhole /><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Mostrar ou ocultar senha">{showPassword ? <EyeOff /> : <Eye />}</button></div></label>
           {message && <div className="auth-message error">{message}</div>}
