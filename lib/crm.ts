@@ -27,6 +27,15 @@ export type CrmLead = {
   convertedClientId?: string;
 };
 
+export type CrmQuoteSummary = {
+  id: string;
+  crmLeadId?: string;
+  client: string;
+  negotiatedPrice: number;
+  finalMargin: number;
+  date: string;
+};
+
 export const CRM_ACTIVE_STAGES: CrmStage[] = [
   "prospecting",
   "contacted",
@@ -62,6 +71,24 @@ export function nextCrmStage(stage: CrmStage): CrmStage | null {
   const index = CRM_ACTIVE_STAGES.indexOf(stage);
   if (index < 0 || index === CRM_ACTIVE_STAGES.length - 1) return null;
   return CRM_ACTIVE_STAGES[index + 1];
+}
+
+export function attachQuoteToCrmLead(lead: CrmLead, estimatedValue: number, updatedAt = new Date().toISOString()): CrmLead {
+  return { ...lead, estimatedValue, updatedAt };
+}
+
+export function restartCrmFollowUp(
+  lead: CrmLead,
+  nextActionDate: string,
+  updatedAt = new Date().toISOString(),
+): CrmLead {
+  return {
+    ...lead,
+    stage: "prospecting",
+    lossReason: undefined,
+    nextActionDate,
+    updatedAt,
+  };
 }
 
 const startOfDay = (date: Date) => {

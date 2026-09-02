@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { crmMetrics, filterCrmLeads, nextCrmStage, type CrmLead } from "../lib/crm";
+import {
+  attachQuoteToCrmLead,
+  crmMetrics,
+  filterCrmLeads,
+  nextCrmStage,
+  restartCrmFollowUp,
+  type CrmLead,
+} from "../lib/crm";
 
 const lead = (stage: CrmLead["stage"], updatedAt: string, value = 1000): CrmLead => ({
   id: `${stage}-${updatedAt}`,
@@ -22,6 +29,21 @@ test("pipeline avança na ordem e para na negociação", () => {
   assert.equal(nextCrmStage("prospecting"), "contacted");
   assert.equal(nextCrmStage("proposal"), "negotiation");
   assert.equal(nextCrmStage("negotiation"), null);
+});
+
+test("cotar não é uma transição de etapa do pipeline", () => {
+  const current = lead("qualified", "2026-09-02T10:00:00Z", 0);
+  const quoted = attachQuoteToCrmLead(current, 7990, "2026-09-02T11:00:00Z");
+  assert.equal(quoted.stage, "qualified");
+  assert.equal(quoted.estimatedValue, 7990);
+});
+
+test("lead em follow-up pode voltar ao início da prospecção", () => {
+  const current = { ...lead("lost", "2026-09-02T10:00:00Z"), lossReason: "Sem retorno" };
+  const restarted = restartCrmFollowUp(current, "2026-09-03", "2026-09-02T12:00:00Z");
+  assert.equal(restarted.stage, "prospecting");
+  assert.equal(restarted.lossReason, undefined);
+  assert.equal(restarted.nextActionDate, "2026-09-03");
 });
 
 test("filtro comercial respeita o período selecionado", () => {

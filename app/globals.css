@@ -189,6 +189,9 @@ body {
   background: linear-gradient(145deg, #111f34, #0c1728);
   box-shadow: 0 9px 24px #0002;
 }
+.crm-card[draggable="true"] { cursor: grab; }
+.crm-card[draggable="true"]:active { cursor: grabbing; opacity: .72; }
+.crm-column.drag-active { border-color: #4289e7; }
 .crm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .crm-card-head > span { color: #70aefb; font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .crm-card-head > div { display: flex; gap: 4px; }
@@ -213,6 +216,11 @@ body {
 .crm-card > strong { display: block; color: #65ddb5; font-size: 13px; margin-bottom: 11px; }
 .crm-card > small { display: flex; align-items: center; gap: 6px; color: #8797ab; font-size: 9px; }
 .crm-card > small svg { width: 13px; }
+.crm-quote-chip { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; padding: 7px; border: 1px solid #285482; border-radius: 8px; background: #10233b; color: #a9cfff; }
+.crm-quote-chip > svg { width: 14px; flex: 0 0 auto; }
+.crm-quote-chip > span { display: flex; flex-direction: column; gap: 2px; }
+.crm-quote-chip b { font-size: 9px; }
+.crm-quote-chip small { color: var(--muted); font-size: 8px; }
 .crm-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
 .crm-card-actions button {
   min-height: 32px;
@@ -241,11 +249,15 @@ body {
   border-top: 1px solid var(--line);
 }
 .crm-list article > div { display: flex; flex-direction: column; gap: 3px; }
+.crm-list article > button.crm-restart { color: #6fb1ff; }
+.crm-list article > button.crm-restart:hover { color: #fff; background: #2679df; }
 .crm-list article small,
 .crm-list article em { color: var(--muted); font-size: 10px; font-style: normal; }
 .crm-modal > label { display: flex; flex-direction: column; gap: 7px; color: #9eacc0; font-size: 11px; font-weight: 700; }
 .crm-modal textarea { min-height: 78px; resize: vertical; }
 .crm-owner { display: flex; align-items: center; gap: 7px; margin-top: 13px; color: #8292a7; font-size: 10px; }
+.crm-stage-readonly { min-height: 42px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: #0a1425; }
+.crm-stage-readonly small { color: var(--muted); font-size: 8px; font-weight: 500; }
 .crm-owner svg { width: 15px; color: #66aaff; }
 .crm-decision { padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; }
 .crm-decision.win { background: #0c2a251f; border-color: #277b634d; }
@@ -260,6 +272,7 @@ body {
 .shell.light .crm-card { background: linear-gradient(145deg, #ffffff, #f5f8fe); border-color: #cbd9e8; }
 .shell.light .crm-column > header { color: #405978; border-color: #d7e1ed; }
 .shell.light .crm-card h3 { color: #132844; }
+.shell.light .crm-quote-chip, .shell.light .crm-stage-readonly { background: #edf5ff; border-color: #c3d7ee; color: #2864a8; }
 .shell.light .crm-card-actions button { background: #edf5ff; border-color: #c3d7ee; color: #2864a8; }
 .shell.light .crm-card-actions button.advance { color: white; background: linear-gradient(90deg, #277add, #6751df); }
 .shell.light .crm-decision.win { background: #effaf6; border-color: #b9dfd1; }
@@ -3550,6 +3563,9 @@ textarea {
   color: var(--muted);
   font-size: 8px;
 }
+.history-delete { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; color: #ff6b7f; background: #e8495f18; cursor: pointer; }
+.history-delete:hover { color: white; background: #d83f55; }
+.history-delete svg { width: 14px; }
 .contract-adjustment-modal {
   width: min(720px, 100%);
 }

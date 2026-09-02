@@ -91,7 +91,7 @@ import {
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
 import { exportReportExcel, exportReportPdf } from "@/lib/report-export";
 import { Crm } from "@/components/crm";
-import type { CrmLead } from "@/lib/crm";
+import { attachQuoteToCrmLead, type CrmLead } from "@/lib/crm";
 import {
   initializeWorkspace,
   loadWorkspace,
@@ -174,6 +174,7 @@ type ClientRecord = ClientInput & {
 };
 type QuoteRecord = {
   id: string;
+  crmLeadId?: string;
   client: string;
   seller: string;
   minimumPrice: number;
@@ -279,7 +280,7 @@ const INITIAL_CLIENT_RECORDS: ClientRecord[] = [
     name: "LIKE LINK TELECOM",
     legalName: "LIKE LINK TELECOM",
     activeClients: 2500,
-    monthlyRevenue: 5800,
+    monthlyRevenue: 2057,
     intensityFactor: 1,
     schedule: [
       ...weekSchedule("08:00", "00:00", [0, 1, 2, 3, 4]),
@@ -3569,9 +3570,6 @@ function Pricing({
   open,
   p,
   clients,
-  clientRecords,
-  setClients,
-  setEntries,
   quotes,
   setQuotes,
   crmLeads,
@@ -3580,15 +3578,6 @@ function Pricing({
   open: any;
   p: AtsocParameters;
   clients: ClientInput[];
-  clientRecords: ClientRecord[];
-  setClients: (
-    updater: ClientRecord[] | ((current: ClientRecord[]) => ClientRecord[]),
-  ) => void;
-  setEntries: (
-    updater:
-      | FinancialEntry[]
-      | ((current: FinancialEntry[]) => FinancialEntry[]),
-  ) => void;
   quotes: QuoteRecord[];
   setQuotes: (
     updater: QuoteRecord[] | ((current: QuoteRecord[]) => QuoteRecord[]),
@@ -3616,6 +3605,7 @@ function Pricing({
     [usePostCall, setUsePostCall] = useState(false),
     [profile, setProfile] = useState<"seller" | "admin">("admin"),
     [quotesOpen, setQuotesOpen] = useState(false);
+  const [sourceCrmLeadId, setSourceCrmLeadId] = useState("");
   const [sch, setSch] = useState(
     days.map((d, i) => ({
       d,
@@ -3633,6 +3623,7 @@ function Pricing({
       setResponsible(lead.contact || "");
       setPhone(lead.phone || "");
       setEmail(lead.email || "");
+      setSourceCrmLeadId(lead.id || "");
     } finally {
       sessionStorage.removeItem("atsoc-crm-pricing-lead");
     }
@@ -3697,8 +3688,10 @@ function Pricing({
       p,
       effectivePrice,
     );
+    const quoteId = `quote-history-${Date.now()}`;
     const audit: QuoteRecord = {
-      id: `quote-history-${Date.now()}`,
+      id: quoteId,
+      crmLeadId: sourceCrmLeadId || undefined,
       client: providerName,
       seller,
       minimumPrice,
@@ -3713,80 +3706,32 @@ function Pricing({
     };
     setQuotes((current) => [audit, ...current].slice(0, 100));
     const crmNow = new Date().toISOString();
-    const crmMatch = crmLeads.find(
-      (lead) => lead.company.trim().toLowerCase() === providerName.trim().toLowerCase(),
+    const crmMatch = crmLeads.find((lead) =>
+      (sourceCrmLeadId && lead.id === sourceCrmLeadId)
+      || lead.company.trim().toLowerCase() === providerName.trim().toLowerCase(),
     );
     setCrmLeads((current) => {
-      const crmRecord: CrmLead = {
-        ...(crmMatch || {
+      const baseRecord: CrmLead = crmMatch || {
           id: `lead-quote-${Date.now()}`,
           company: providerName.trim(),
           contact: responsible,
           phone,
           email,
           origin: "Cotador",
+          stage: "prospecting",
           estimatedValue: effectivePrice,
           nextActionDate: shiftIsoDate(localIsoDate(), 7),
           notes: "Criado automaticamente pelo Cotador.",
           owner: "Vinicius Scielzo",
           createdAt: crmNow,
-        }),
-        stage: closedInCall ? "won" : "proposal",
-        estimatedValue: effectivePrice,
-        updatedAt: crmNow,
+          updatedAt: crmNow,
       };
+      const crmRecord = attachQuoteToCrmLead(baseRecord, effectivePrice, crmNow);
       return crmMatch
         ? current.map((lead) => lead.id === crmMatch.id ? crmRecord : lead)
         : [crmRecord, ...current];
     });
-    const existing = clientRecords.find(
-      (client) =>
-        client.name.trim().toLowerCase() === providerName.trim().toLowerCase(),
-    );
-    const record: ClientRecord = {
-      ...(existing || {}),
-      ...quoteClient,
-      id: existing?.id || `quote-${Date.now()}`,
-      name: providerName.trim(),
-      monthlyRevenue: effectivePrice,
-      status: closedInCall ? "active" : "inactive",
-      cnpj,
-      responsible,
-      phone,
-      email,
-      channels,
-      supportLevel,
-      contractStart,
-      billingDay,
-      seller,
-      inactiveAt: closedInCall ? undefined : localIsoDate(),
-      followUpDate: closedInCall ? undefined : shiftIsoDate(localIsoDate(), 7),
-      inactiveReason: closedInCall ? undefined : "Proposta não fechada na call",
-    };
-    setClients((current) =>
-      existing
-        ? current.map((client) => (client.id === existing.id ? record : client))
-        : [...current, record],
-    );
-    setEntries((current) => {
-      const prefix = `contract-${record.id}-`;
-      const preserved = current.filter(
-        (entry) => !entry.id.startsWith(prefix) || entry.status === "Recebido",
-      );
-      if (record.status !== "active") return preserved;
-      const existingIds = new Set(preserved.map((entry) => entry.id));
-      return [
-        ...preserved,
-        ...createClientReceivables(record).filter(
-          (entry) => !existingIds.has(entry.id),
-        ),
-      ];
-    });
-    open(
-      closedInCall
-        ? "Venda fechada: cliente, contrato e recebimentos criados"
-        : "Proposta enviada para follow-up comercial",
-    );
+    open("Cotação salva e vinculada ao CRM");
   };
   const requestApproval = async () => {
     if (!providerName.trim() || !seller.trim() || !discountReason.trim()) {
@@ -4344,6 +4289,13 @@ function Pricing({
                       <small>Negociado</small>
                       <b>{brl(Number(quote.negotiatedPrice) || 0)}</b>
                     </span>
+                    <button
+                      className="history-delete"
+                      title="Excluir cotação"
+                      onClick={() => setQuotes((current) => current.filter((item) => item.id !== quote.id))}
+                    >
+                      <Trash2 />
+                    </button>
                     <span>
                       <small>Margem</small>
                       <b>
@@ -7637,6 +7589,7 @@ export default function Home() {
         crm: (
           <Crm
             leads={crmLeads}
+            quotes={quoteRecords}
             setLeads={updateCrmLeads}
             openPricing={(lead) => {
               sessionStorage.setItem("atsoc-crm-pricing-lead", JSON.stringify(lead));
@@ -7650,9 +7603,6 @@ export default function Home() {
             open={open}
             p={parameters}
             clients={activeClients}
-            clientRecords={clientRecords}
-            setClients={updateClientRecords}
-            setEntries={updateFinancialEntries}
             quotes={quoteRecords}
             setQuotes={updateQuoteRecords}
             crmLeads={crmLeads}

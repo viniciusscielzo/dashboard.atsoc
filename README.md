@@ -58,3 +58,7 @@ Os arquivos preparatórios do Supabase foram mantidos no projeto para uma migra�
 npm run build
 npm test
 ```
+- As etapas mudam somente pelo botão **Avançar** ou arrastando o card entre as colunas.
+- **Cotar** mantém o lead na etapa atual e vincula o valor salvo ao card do CRM.
+- O histórico de cotações permite exclusão individual.
+- Leads enviados ao follow-up podem voltar ao início da prospecção; nenhum lead precisa ser descartado.
