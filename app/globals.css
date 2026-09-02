@@ -121,6 +121,156 @@ body {
 .auth-message.error { border-color: #9d3d4d; color: #ff9eaa; }
 .auth-local-status { display: inline-flex; align-items: center; gap: 7px; color: #63d9b5; font-size: 12px; font-weight: 700; }
 .auth-local-status svg { width: 15px; height: 15px; }
+
+/* CRM COMERCIAL */
+.crm-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.crm-periods { margin: 0; }
+.crm-search {
+  min-width: 250px;
+  height: 39px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #0a1425;
+}
+.crm-search svg { width: 16px; color: var(--muted); }
+.crm-search input { flex: 1; min-height: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.crm-tabs { width: max-content; margin-bottom: 14px; }
+.crm-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+.crm-column {
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: linear-gradient(160deg, #0d1829, #091221);
+  overflow: hidden;
+}
+.crm-column > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--line);
+  color: #cbd7e7;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.crm-column > header b {
+  min-width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #8fc2ff;
+  background: #2679df22;
+}
+.crm-column-body { min-height: 310px; padding: 10px; }
+.crm-card {
+  padding: 12px;
+  margin-bottom: 9px;
+  border: 1px solid #203653;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #111f34, #0c1728);
+  box-shadow: 0 9px 24px #0002;
+}
+.crm-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.crm-card-head > span { color: #70aefb; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.crm-card-head > div { display: flex; gap: 4px; }
+.crm-card-head button,
+.crm-list article > button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #72849c;
+  cursor: pointer;
+}
+.crm-card-head button:hover { color: #ff778b; background: #e8495f18; }
+.crm-card-head button:first-child:hover { color: #7db8ff; background: #3d8fea18; }
+.crm-card-head svg,
+.crm-list article > button svg { width: 14px; }
+.crm-card h3 { margin: 11px 0 3px; font-size: 14px; }
+.crm-card p { margin: 0 0 10px; color: var(--muted); font-size: 10px; }
+.crm-card > strong { display: block; color: #65ddb5; font-size: 13px; margin-bottom: 11px; }
+.crm-card > small { display: flex; align-items: center; gap: 6px; color: #8797ab; font-size: 9px; }
+.crm-card > small svg { width: 13px; }
+.crm-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+.crm-card-actions button {
+  min-height: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #284666;
+  border-radius: 8px;
+  background: #10233b;
+  color: #a9cfff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.crm-card-actions button.advance { border-color: #326fc0; background: linear-gradient(90deg, #1f6fcf, #6550df); color: white; }
+.crm-card-actions svg { width: 13px; }
+.crm-column-empty,
+.crm-list-empty { padding: 34px 12px; text-align: center; color: #66778d; font-size: 10px; }
+.crm-list article {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.4fr) 130px 120px minmax(180px, 1fr) 34px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 3px;
+  border-top: 1px solid var(--line);
+}
+.crm-list article > div { display: flex; flex-direction: column; gap: 3px; }
+.crm-list article small,
+.crm-list article em { color: var(--muted); font-size: 10px; font-style: normal; }
+.crm-modal > label { display: flex; flex-direction: column; gap: 7px; color: #9eacc0; font-size: 11px; font-weight: 700; }
+.crm-modal textarea { min-height: 78px; resize: vertical; }
+.crm-owner { display: flex; align-items: center; gap: 7px; margin-top: 13px; color: #8292a7; font-size: 10px; }
+.crm-owner svg { width: 15px; color: #66aaff; }
+.crm-decision { padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; }
+.crm-decision.win { background: #0c2a251f; border-color: #277b634d; }
+.crm-decision.loss { background: #31151b25; border-color: #a348584d; }
+.crm-decision h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 5px; }
+.crm-decision h4 svg { width: 17px; }
+.crm-decision p { margin: 0 0 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.crm-decision label { display: flex; flex-direction: column; gap: 7px; color: #9eacc0; font-size: 10px; font-weight: 700; }
+.crm-decision .btn { margin-top: 11px; }
+.shell.light .crm-search,
+.shell.light .crm-column,
+.shell.light .crm-card { background: linear-gradient(145deg, #ffffff, #f5f8fe); border-color: #cbd9e8; }
+.shell.light .crm-column > header { color: #405978; border-color: #d7e1ed; }
+.shell.light .crm-card h3 { color: #132844; }
+.shell.light .crm-card-actions button { background: #edf5ff; border-color: #c3d7ee; color: #2864a8; }
+.shell.light .crm-card-actions button.advance { color: white; background: linear-gradient(90deg, #277add, #6751df); }
+.shell.light .crm-decision.win { background: #effaf6; border-color: #b9dfd1; }
+.shell.light .crm-decision.loss { background: #fff4f6; border-color: #efc8cf; }
+@media (max-width: 900px) {
+  .crm-toolbar { align-items: stretch; flex-direction: column; }
+  .crm-search { min-width: 0; }
+  .crm-periods { overflow-x: auto; }
+  .crm-list article { grid-template-columns: 1fr 110px; }
+  .crm-list article > :nth-child(3), .crm-list article > :nth-child(4) { display: none; }
+}
 .fatal-error { min-height: 100vh; display: grid; place-items: center; padding: 30px; background: #060b18; color: white; }
 .fatal-error > div { max-width: 560px; padding: 36px; border: 1px solid #263a56; border-radius: 20px; background: #0d1729; }
 .fatal-error small { color: #4b9cff; letter-spacing: .14em; font-weight: 800; }

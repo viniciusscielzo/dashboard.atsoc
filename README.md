@@ -32,6 +32,22 @@ Acesse `http://localhost:3000` e entre com o acesso definido na entrega.
 
 Não limpe os dados do site no navegador. Trocar o domínio, usar outro navegador ou apagar o armazenamento do site não transfere automaticamente os registros.
 
+## CRM Comercial
+
+O menu **CRM Comercial** possui:
+
+- indicadores para hoje, 7, 15, 30 e 90 dias;
+- pipeline de Prospecção até Negociação;
+- origem e etapa selecionáveis;
+- responsável automático Vinicius Scielzo;
+- botão para avançar o lead;
+- envio dos dados básicos diretamente ao Cotador;
+- conversão da negociação em cliente e recebimentos mensais;
+- registro de oportunidades perdidas com motivo;
+- históricos separados de ganhos e perdas.
+
+Ao converter um lead, complete os horários contratados em **Clientes e Contratos** para que o FTE e a capacidade sejam calculados corretamente.
+
 ## Estrutura futura
 
 Os arquivos preparatórios do Supabase foram mantidos no projeto para uma migração posterior. Eles não são necessários para esta versão local e não devem ser configurados até a migração ser planejada.

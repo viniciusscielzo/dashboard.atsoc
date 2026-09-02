@@ -90,6 +90,8 @@ import {
 } from "@/lib/atsoc-control";
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
 import { exportReportExcel, exportReportPdf } from "@/lib/report-export";
+import { Crm } from "@/components/crm";
+import type { CrmLead } from "@/lib/crm";
 import {
   initializeWorkspace,
   loadWorkspace,
@@ -102,6 +104,7 @@ type Key =
   | "cashflow"
   | "accounts"
   | "clients"
+  | "crm"
   | "pricing"
   | "capacity"
   | "team"
@@ -301,6 +304,7 @@ const menu: [Key, string, any][] = [
   ["cashflow", "Fluxo de Caixa", TrendingUp],
   ["accounts", "Contas", ReceiptText],
   ["clients", "Clientes e Contratos", Building2],
+  ["crm", "CRM Comercial", Target],
   ["pricing", "Cotador / Precificação", Calculator],
   ["capacity", "Operação e Capacidade", Gauge],
   ["team", "Equipe", Users],
@@ -3570,6 +3574,8 @@ function Pricing({
   setEntries,
   quotes,
   setQuotes,
+  crmLeads,
+  setCrmLeads,
 }: {
   open: any;
   p: AtsocParameters;
@@ -3586,6 +3592,10 @@ function Pricing({
   quotes: QuoteRecord[];
   setQuotes: (
     updater: QuoteRecord[] | ((current: QuoteRecord[]) => QuoteRecord[]),
+  ) => void;
+  crmLeads: CrmLead[];
+  setCrmLeads: (
+    updater: CrmLead[] | ((current: CrmLead[]) => CrmLead[]),
   ) => void;
 }) {
   const [base, setBase] = useState(0),
@@ -3614,6 +3624,19 @@ function Pricing({
       off: i === 6,
     })),
   );
+  useEffect(() => {
+    const raw = sessionStorage.getItem("atsoc-crm-pricing-lead");
+    if (!raw) return;
+    try {
+      const lead = JSON.parse(raw) as Partial<CrmLead>;
+      setProviderName(lead.company || "");
+      setResponsible(lead.contact || "");
+      setPhone(lead.phone || "");
+      setEmail(lead.email || "");
+    } finally {
+      sessionStorage.removeItem("atsoc-crm-pricing-lead");
+    }
+  }, []);
   const schedule: DaySchedule[] = sch.map((d, day) => ({
     day,
     start: d.start,
@@ -3689,6 +3712,33 @@ function Pricing({
       date: new Date().toISOString(),
     };
     setQuotes((current) => [audit, ...current].slice(0, 100));
+    const crmNow = new Date().toISOString();
+    const crmMatch = crmLeads.find(
+      (lead) => lead.company.trim().toLowerCase() === providerName.trim().toLowerCase(),
+    );
+    setCrmLeads((current) => {
+      const crmRecord: CrmLead = {
+        ...(crmMatch || {
+          id: `lead-quote-${Date.now()}`,
+          company: providerName.trim(),
+          contact: responsible,
+          phone,
+          email,
+          origin: "Cotador",
+          estimatedValue: effectivePrice,
+          nextActionDate: shiftIsoDate(localIsoDate(), 7),
+          notes: "Criado automaticamente pelo Cotador.",
+          owner: "Vinicius Scielzo",
+          createdAt: crmNow,
+        }),
+        stage: closedInCall ? "won" : "proposal",
+        estimatedValue: effectivePrice,
+        updatedAt: crmNow,
+      };
+      return crmMatch
+        ? current.map((lead) => lead.id === crmMatch.id ? crmRecord : lead)
+        : [crmRecord, ...current];
+    });
     const existing = clientRecords.find(
       (client) =>
         client.name.trim().toLowerCase() === providerName.trim().toLowerCase(),
@@ -7197,6 +7247,7 @@ export default function Home() {
     [clientRecords, setClientRecords] = useState<ClientRecord[]>(INITIAL_CLIENT_RECORDS),
     [quoteRecords, setQuoteRecordsState] = useState<QuoteRecord[]>([]),
     [scenarioRecords, setScenarioRecordsState] = useState<ScenarioRecord[]>([]),
+    [crmLeads, setCrmLeadsState] = useState<CrmLead[]>([]),
     [companyLogo, setCompanyLogoState] = useState(""),
     [initialBalance, setInitialBalanceState] = useState(0),
     [searchQuery, setSearchQuery] = useState(""),
@@ -7230,6 +7281,7 @@ export default function Home() {
       setClientRecords((data.clientRecords || INITIAL_CLIENT_RECORDS) as ClientRecord[]);
       setQuoteRecordsState((data.quoteRecords || []) as QuoteRecord[]);
       setScenarioRecordsState((data.scenarioRecords || []) as ScenarioRecord[]);
+      setCrmLeadsState((data.crmLeads || []) as CrmLead[]);
       setCompanyLogoState(typeof data.companyLogo === "string" ? data.companyLogo : "");
       setInitialBalanceState(Number(data.initialBalance) || 0);
     };
@@ -7249,6 +7301,7 @@ export default function Home() {
             clientRecords: INITIAL_CLIENT_RECORDS,
             quoteRecords: [],
             scenarioRecords: [],
+            crmLeads: [],
             companyLogo: "",
             initialBalance: 0,
             approvalRequests: [],
@@ -7436,6 +7489,14 @@ export default function Home() {
       persist("scenarioRecords", next);
       return next;
     });
+  const updateCrmLeads = (
+    updater: CrmLead[] | ((current: CrmLead[]) => CrmLead[]),
+  ) =>
+    setCrmLeadsState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      persist("crmLeads", next);
+      return next;
+    });
   const toggleTheme = () =>
     setTheme((t) => {
       const next = t === "dark" ? "light" : "dark";
@@ -7482,6 +7543,16 @@ export default function Home() {
                 : "Contrato em recuperação",
             icon: Building2,
           })),
+        ...crmLeads
+          .filter((lead) =>
+            `${lead.company} ${lead.contact}`.toLowerCase().includes(searchQuery.toLowerCase()),
+          )
+          .map((lead) => ({
+            key: "crm" as Key,
+            label: lead.company,
+            detail: "Lead no CRM",
+            icon: Target,
+          })),
       ].slice(0, 7)
     : [];
   const goTo = (key: Key) => {
@@ -7489,6 +7560,34 @@ export default function Home() {
     setSearchOpen(false);
     setNotificationsOpen(false);
     setMobile(false);
+  };
+  const convertCrmLead = (
+    lead: CrmLead,
+    data: { monthlyRevenue: number; activeClients: number; billingDay: number; contractStart: string },
+  ) => {
+    const clientId = `crm-client-${Date.now()}`;
+    const client: ClientRecord = {
+      id: clientId,
+      name: lead.company,
+      legalName: lead.company,
+      responsible: lead.contact,
+      phone: lead.phone,
+      email: lead.email,
+      activeClients: data.activeClients,
+      monthlyRevenue: data.monthlyRevenue,
+      intensityFactor: parameters.defaultIntensityFactor,
+      schedule: weekSchedule("00:00", "00:00", []),
+      status: "active",
+      contractStart: data.contractStart,
+      billingDay: Math.min(31, Math.max(1, data.billingDay)),
+      seller: "Vinicius Scielzo",
+      channels: "WhatsApp + Telefone",
+      supportLevel: "N1 + N2",
+      cacManual: 0,
+    };
+    updateClientRecords((current) => [...current, client]);
+    updateFinancialEntries((current) => [...current, ...createClientReceivables(client)]);
+    return clientId;
   };
   const content = useMemo(
     () =>
@@ -7535,6 +7634,17 @@ export default function Home() {
             setEntries={updateFinancialEntries}
           />
         ),
+        crm: (
+          <Crm
+            leads={crmLeads}
+            setLeads={updateCrmLeads}
+            openPricing={(lead) => {
+              sessionStorage.setItem("atsoc-crm-pricing-lead", JSON.stringify(lead));
+              goTo("pricing");
+            }}
+            convertToClient={convertCrmLead}
+          />
+        ),
         pricing: (
           <Pricing
             open={open}
@@ -7545,6 +7655,8 @@ export default function Home() {
             setEntries={updateFinancialEntries}
             quotes={quoteRecords}
             setQuotes={updateQuoteRecords}
+            crmLeads={crmLeads}
+            setCrmLeads={updateCrmLeads}
           />
         ),
         capacity: (
@@ -7597,6 +7709,7 @@ export default function Home() {
       teamMembers,
       quoteRecords,
       scenarioRecords,
+      crmLeads,
       companyLogo,
     ],
   );
