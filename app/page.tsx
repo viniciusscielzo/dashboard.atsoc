@@ -279,7 +279,7 @@ const INITIAL_CLIENT_RECORDS: ClientRecord[] = [
     name: "LIKE LINK TELECOM",
     legalName: "LIKE LINK TELECOM",
     activeClients: 2500,
-    monthlyRevenue: 2057,
+    monthlyRevenue: 5800,
     intensityFactor: 1,
     schedule: [
       ...weekSchedule("08:00", "00:00", [0, 1, 2, 3, 4]),
