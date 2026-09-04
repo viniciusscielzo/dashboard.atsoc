@@ -290,6 +290,45 @@ body {
 .fatal-error button { border: 0; border-radius: 10px; padding: 12px 18px; background: #287ff0; color: white; font-weight: 700; cursor: pointer; }
 .workspace-error { margin-bottom: 14px; display: flex; align-items: center; gap: 9px; border: 1px solid #a04455; border-radius: 10px; padding: 11px 14px; color: #ff98a5; background: #3d101a77; }
 .workspace-loading { min-height: 45vh; display: grid; place-items: center; color: var(--muted); }
+.action-toast {
+  position: fixed;
+  z-index: 2000;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 15px;
+  border: 1px solid #2b8a70;
+  border-radius: 10px;
+  background: #0c2c26;
+  color: #dffbf2;
+  box-shadow: 0 16px 38px #0007;
+  font-size: 11px;
+  font-weight: 700;
+  animation: action-toast-in .18s ease-out;
+}
+.action-toast.error { border-color: #bd4d60; background: #35151d; color: #ffdce2; }
+.action-toast svg { width: 16px; flex: 0 0 auto; }
+@keyframes action-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.time-band-config { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #091528; }
+.time-band-title { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.time-band-title > span { display: flex; flex-direction: column; gap: 4px; }
+.time-band-title b { font-size: 12px; }
+.time-band-title small, .time-band-help { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.time-band-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.time-band-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #0c192c; }
+.time-band-card > b { grid-column: 1 / -1; font-size: 11px; color: #dce9f8; }
+.time-band-card label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 8px; font-weight: 700; }
+.time-band-card input { min-width: 0; padding: 8px; }
+.time-band-help { display: block; margin-top: 10px; }
+.shell.light .time-band-config, .shell.light .time-band-card { background: #f7faff; border-color: #cbd9e8; }
+.shell.light .time-band-card > b { color: #17304f; }
+@media (max-width: 900px) {
+  .time-band-grid { grid-template-columns: 1fr; }
+  .action-toast { right: 16px; bottom: 16px; }
+}
 .signout-form { margin-top: 4px; }
 .shell > aside footer .signout-form > button { color: #8090a7; justify-content: flex-start; gap: 12px; }
 .shell > aside footer .signout-form > button:hover { color: #ff8794; background: #2a111a; }

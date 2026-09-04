@@ -129,6 +129,13 @@ export type BaseFactor = {
   factor: number;
   label: string;
 };
+export type OperationalTimeBand = {
+  id: string;
+  label: string;
+  start: string;
+  end: string;
+  factor: number;
+};
 export type RoundingStrategy =
   | "commercial90"
   | "commercial99"
@@ -152,6 +159,7 @@ export type AtsocParameters = {
   productiveHoursMonth: number;
   weeksPerMonth: number;
   defaultIntensityFactor: number;
+  operationalTimeBands: OperationalTimeBand[];
   partnerEquivalentMonthlyCost: number;
   partnerProductiveHoursMonth: number;
   operationalPartnersFte: number;
@@ -204,6 +212,11 @@ export const DEFAULT_PARAMETERS: AtsocParameters = {
   productiveHoursMonth: 176,
   weeksPerMonth: 4.345,
   defaultIntensityFactor: 1,
+  operationalTimeBands: [
+    { id: "day", label: "Diurno", start: "06:00", end: "18:00", factor: 1 },
+    { id: "evening", label: "Noturno", start: "18:00", end: "00:00", factor: 0.8 },
+    { id: "overnight", label: "Madrugada", start: "00:00", end: "06:00", factor: 0.5 },
+  ],
   partnerEquivalentMonthlyCost: 5500,
   partnerProductiveHoursMonth: 176,
   operationalPartnersFte: 1,
@@ -394,6 +407,16 @@ export const DEFAULT_PARAMETERS: AtsocParameters = {
   targetPartnersLeaveOperations: true,
 };
 
+export function mergeAtsocParameters(saved?: Partial<AtsocParameters> | null) {
+  return {
+    ...DEFAULT_PARAMETERS,
+    ...(saved || {}),
+    operationalTimeBands: saved?.operationalTimeBands?.length
+      ? saved.operationalTimeBands
+      : DEFAULT_PARAMETERS.operationalTimeBands,
+  } satisfies AtsocParameters;
+}
+
 export function isGrupoSilvaSeller(seller?: string) {
   return /\s-\sgrupo silva$/i.test((seller || "").trim());
 }
@@ -477,11 +500,63 @@ export function theoreticalClientLoad(
 ) {
   return activeClients / p.theoreticalClientsPerFte;
 }
-export function adjustedClientLoad(client: ClientInput, p: AtsocParameters) {
-  return (
-    theoreticalClientLoad(client.activeClients, p) *
-    (client.intensityFactor ?? p.defaultIntensityFactor)
+function baseAdjustedClientLoad(client: ClientInput, p: AtsocParameters) {
+  return theoreticalClientLoad(client.activeClients, p) *
+    (client.intensityFactor ?? p.defaultIntensityFactor);
+}
+function minuteIsInsideBand(minute: number, start: number, end: number) {
+  if (start === end) return true;
+  return end > start
+    ? minute >= start && minute < end
+    : minute >= start || minute < end;
+}
+export function operationalTimeFactorAt(
+  time: string | number,
+  p: AtsocParameters,
+) {
+  const minute = typeof time === "number" ? ((time % 1440) + 1440) % 1440 : timeToMinutes(time);
+  const bands = p.operationalTimeBands?.length
+    ? p.operationalTimeBands
+    : DEFAULT_PARAMETERS.operationalTimeBands;
+  const match = bands.find((band) =>
+    minuteIsInsideBand(minute, timeToMinutes(band.start), timeToMinutes(band.end)),
   );
+  return Math.max(0.01, Number(match?.factor) || 1);
+}
+export function validateOperationalTimeBands(bands: OperationalTimeBand[]) {
+  if (!bands?.length)
+    return { valid: false, message: "Cadastre ao menos uma faixa horária." };
+  if (bands.some((band) => !band.start || !band.end || !(Number(band.factor) > 0)))
+    return { valid: false, message: "Todos os horários e fatores devem ser válidos e maiores que zero." };
+  const invalidSlot = Array.from({ length: 48 }, (_, slot) => slot * 30).find((minute) =>
+    bands.filter((band) =>
+      minuteIsInsideBand(minute, timeToMinutes(band.start), timeToMinutes(band.end)),
+    ).length !== 1,
+  );
+  return invalidSlot === undefined
+    ? { valid: true, message: "Faixas horárias válidas" }
+    : {
+        valid: false,
+        message: `As faixas devem cobrir as 24 horas sem lacunas ou sobreposição. Revise ${String(Math.floor(invalidSlot / 60)).padStart(2, "0")}:${invalidSlot % 60 ? "30" : "00"}.`,
+      };
+}
+export function adjustedClientLoadAt(
+  client: ClientInput,
+  p: AtsocParameters,
+  time: string | number,
+) {
+  return baseAdjustedClientLoad(client, p) * operationalTimeFactorAt(time, p);
+}
+export function adjustedClientLoad(client: ClientInput, p: AtsocParameters) {
+  let peakFactor = 0;
+  for (const day of client.schedule) {
+    if (!day.enabled) continue;
+    const start = timeToMinutes(day.start);
+    const minutes = coverageMinutes(day.start, day.end);
+    for (let offset = 0; offset < minutes; offset += 30)
+      peakFactor = Math.max(peakFactor, operationalTimeFactorAt(start + offset, p));
+  }
+  return baseAdjustedClientLoad(client, p) * (peakFactor || 1);
 }
 export function safeClientsPerFte(p: AtsocParameters) {
   return p.theoreticalClientsPerFte * p.safeUtilization;
@@ -499,11 +574,17 @@ export function equivalentMonthlyHours(
   client: ClientInput,
   p: AtsocParameters,
 ) {
-  return (
-    weeklyCoverageHours(client.schedule) *
-    p.weeksPerMonth *
-    adjustedClientLoad(client, p)
-  );
+  const baseLoad = baseAdjustedClientLoad(client, p);
+  const weightedWeeklyHours = client.schedule.reduce((total, day) => {
+    if (!day.enabled) return total;
+    const start = timeToMinutes(day.start);
+    const minutes = coverageMinutes(day.start, day.end);
+    let weighted = 0;
+    for (let offset = 0; offset < minutes; offset += 30)
+      weighted += 0.5 * operationalTimeFactorAt(start + offset, p);
+    return total + weighted;
+  }, 0);
+  return weightedWeeklyHours * p.weeksPerMonth * baseLoad;
 }
 export function clientOperationalCost(client: ClientInput, p: AtsocParameters) {
   return equivalentMonthlyHours(client, p) * employeeHourlyCost(p);
@@ -548,13 +629,15 @@ export function analyzeCapacity(
   const maps = clients.map((c) => ({
     c,
     slots: activeSlotsForSchedule(c.schedule),
-    load: adjustedClientLoad(c, p),
   }));
   const slots = Array.from({ length: 336 }, (_, index) => {
     const day = Math.floor(index / 48),
       slot = index % 48,
       active = maps.filter((m) => m.slots.has(index));
-    const requiredFte = active.reduce((s, m) => s + m.load, 0);
+    const requiredFte = active.reduce(
+      (s, m) => s + adjustedClientLoadAt(m.c, p, slot * 30),
+      0,
+    );
     return {
       day,
       slot,

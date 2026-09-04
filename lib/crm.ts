@@ -91,18 +91,26 @@ export function restartCrmFollowUp(
   };
 }
 
-const startOfDay = (date: Date) => {
-  const result = new Date(date);
-  result.setHours(0, 0, 0, 0);
-  return result;
+const saoPauloCalendarDay = (date: Date) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value || 0);
+  return Date.UTC(value("year"), value("month") - 1, value("day")) / 86_400_000;
 };
 
 export function filterCrmLeads(leads: CrmLead[], period: CrmPeriod, now = new Date()) {
   if (period === "Tudo") return leads;
   const days = period === "Hoje" ? 0 : Number(period.split(" ")[0]) - 1;
-  const start = startOfDay(now);
-  start.setDate(start.getDate() - days);
-  return leads.filter((lead) => new Date(lead.updatedAt).getTime() >= start.getTime());
+  const today = saoPauloCalendarDay(now);
+  return leads.filter((lead) => {
+    const distance = today - saoPauloCalendarDay(new Date(lead.updatedAt));
+    return distance >= 0 && distance <= days;
+  });
 }
 
 export function crmMetrics(leads: CrmLead[], period: CrmPeriod, now = new Date()) {

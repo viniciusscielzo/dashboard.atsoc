@@ -70,6 +70,7 @@ import {
   equivalentMonthlyHours,
   monthlyCacCost,
   monthlyContractDueDates,
+  mergeAtsocParameters,
   normalizedPartnerCost,
   preserveInstallmentOnContractAdjustment,
   quoteStatementAtPrice,
@@ -78,6 +79,7 @@ import {
   theoreticalClientLoad,
   timeToMinutes,
   validateMarginPolicy,
+  validateOperationalTimeBands,
   weeklyCoverageHours,
   weekSchedule,
   type ClientInput,
@@ -3567,7 +3569,7 @@ const postCallLabel = (p: AtsocParameters) => {
   return "Valor personalizado";
 };
 function Pricing({
-  open,
+  notify,
   p,
   clients,
   quotes,
@@ -3575,7 +3577,7 @@ function Pricing({
   crmLeads,
   setCrmLeads,
 }: {
-  open: any;
+  notify: (message: string, tone?: "success" | "error") => void;
   p: AtsocParameters;
   clients: ClientInput[];
   quotes: QuoteRecord[];
@@ -3674,13 +3676,13 @@ function Pricing({
     { ...quoteClient, monthlyRevenue: effectivePrice },
     p,
   );
-  const saveProposal = () => {
+  const saveProposal = (action: "save" | "generate") => {
     if (!providerName.trim()) {
-      open("Informe o nome do provedor antes de salvar");
+      notify("Informe o nome do provedor antes de salvar", "error");
       return;
     }
     if (belowMinimum) {
-      open("Proposta bloqueada: solicite aprovação dos sócios");
+      notify("Proposta bloqueada: solicite aprovação dos sócios", "error");
       return;
     }
     const finalStatement = quoteStatementAtPrice(
@@ -3731,11 +3733,15 @@ function Pricing({
         ? current.map((lead) => lead.id === crmMatch.id ? crmRecord : lead)
         : [crmRecord, ...current];
     });
-    open("Cotação salva e vinculada ao CRM");
+    notify(
+      action === "generate"
+        ? "Proposta gerada, salva e vinculada ao CRM"
+        : "Cotação salva e vinculada ao CRM",
+    );
   };
   const requestApproval = async () => {
     if (!providerName.trim() || !seller.trim() || !discountReason.trim()) {
-      open("Informe cliente, vendedor e motivo para solicitar aprovação");
+      notify("Informe cliente, vendedor e motivo para solicitar aprovação", "error");
       return;
     }
     const request = {
@@ -3756,9 +3762,9 @@ function Pricing({
         "approvalRequests",
         [request, ...requests].slice(0, 100),
       );
-      open("Solicitação enviada aos sócios");
+      notify("Solicitação enviada aos sócios");
     } catch {
-      open("Não foi possível enviar a solicitação. Tente novamente.");
+      notify("Não foi possível enviar a solicitação. Tente novamente.", "error");
     }
   };
   const upd = (i: number, k: string, v: any) =>
@@ -3774,7 +3780,7 @@ function Pricing({
             <ClipboardList />
             Cotações
           </Button>
-          <Button onClick={saveProposal}>
+          <Button onClick={() => saveProposal("save")}>
             <Save />
             Salvar
           </Button>
@@ -4076,6 +4082,10 @@ function Pricing({
           {profile === "admin" && (
             <div className="breakdown admin-memory">
               <div>
+                <span>Horas equivalentes ajustadas</span>
+                <b>{policy.equivalentHours.toFixed(1)}h</b>
+              </div>
+              <div>
                 <span>Custo operacional</span>
                 <b>{brl(policy.operationalCost)}</b>
               </div>
@@ -4247,7 +4257,7 @@ function Pricing({
               </strong>
             </div>
           </div>
-          <Button className="full" onClick={saveProposal}>
+          <Button className="full" onClick={() => saveProposal("generate")}>
             <FileBarChart />
             Gerar proposta
           </Button>
@@ -6403,14 +6413,14 @@ function Reports({
 }
 
 function Config({
-  open,
+  notify,
   p,
   update,
   reset,
   logo,
   setLogo,
 }: {
-  open: any;
+  notify: (message: string, tone?: "success" | "error") => void;
   p: AtsocParameters;
   update: (p: AtsocParameters) => void;
   reset: () => void;
@@ -6423,6 +6433,17 @@ function Config({
   useEffect(() => setDraft(p), [p]);
   const setNumber = (key: keyof AtsocParameters, value: number) =>
     setDraft((d) => ({ ...d, [key]: value }));
+  const timeBandValidation = validateOperationalTimeBands(
+    draft.operationalTimeBands || DEFAULT_PARAMETERS.operationalTimeBands,
+  );
+  const saveConfiguration = () => {
+    if (!timeBandValidation.valid) {
+      notify(timeBandValidation.message, "error");
+      return;
+    }
+    update(draft);
+    notify("Configurações salvas");
+  };
   const handleLogo = (file?: File) => {
     if (!file) return;
     const allowed = ["image/png", "image/jpeg", "image/webp"];
@@ -6448,12 +6469,7 @@ function Config({
         title="Configurações"
         sub="Empresa, usuários e preferências do sistema"
       >
-        <Button
-          onClick={() => {
-            update(draft);
-            open("Configurações salvas");
-          }}
-        >
+        <Button onClick={saveConfiguration}>
           <Save />
           Salvar alterações
         </Button>
@@ -6611,6 +6627,101 @@ function Config({
                 onChange={(e) => setNumber("weeksPerMonth", +e.target.value)}
               />
             </label>
+          </div>
+          <div className="time-band-config">
+            <div className="time-band-title">
+              <span>
+                <b>Fatores de demanda por faixa horária</b>
+                <small>
+                  Ajustam o FTE, as horas equivalentes e o custo operacional em
+                  cada bloco de 30 minutos.
+                </small>
+              </span>
+              <Pill tone={timeBandValidation.valid ? "green" : "red"}>
+                {timeBandValidation.valid ? "24h configuradas" : "Revisar faixas"}
+              </Pill>
+            </div>
+            <div className="time-band-grid">
+              {(draft.operationalTimeBands || DEFAULT_PARAMETERS.operationalTimeBands).map(
+                (band, index) => (
+                  <div className="time-band-card" key={band.id}>
+                    <b>{band.label}</b>
+                    <label>
+                      Início
+                      <input
+                        type="time"
+                        value={band.start}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            operationalTimeBands: (
+                              current.operationalTimeBands ||
+                              DEFAULT_PARAMETERS.operationalTimeBands
+                            ).map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, start: event.target.value }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Fim
+                      <input
+                        type="time"
+                        value={band.end}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            operationalTimeBands: (
+                              current.operationalTimeBands ||
+                              DEFAULT_PARAMETERS.operationalTimeBands
+                            ).map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, end: event.target.value }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Fator
+                      <input
+                        type="number"
+                        min="0.01"
+                        max="3"
+                        step="0.05"
+                        value={band.factor}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            operationalTimeBands: (
+                              current.operationalTimeBands ||
+                              DEFAULT_PARAMETERS.operationalTimeBands
+                            ).map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, factor: +event.target.value }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                ),
+              )}
+            </div>
+            {!timeBandValidation.valid && (
+              <div className="policy-error">
+                <AlertTriangle /> {timeBandValidation.message}
+              </div>
+            )}
+            <small className="time-band-help">
+              Valores iniciais: diurno 1,00; noturno 0,80; madrugada 0,50.
+              Ajuste futuramente conforme o histórico real de chamados.
+            </small>
           </div>
           <div className="setting">
             <span>
@@ -7190,6 +7301,10 @@ export default function Home() {
     [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
     [modal, setModal] = useState<any>(null),
+    [notice, setNotice] = useState<{
+      message: string;
+      tone: "success" | "error";
+    } | null>(null),
     [theme, setTheme] = useState<"dark" | "light">("dark"),
     [financialEntries, setFinancialEntries] = useState<FinancialEntry[]>([]),
     [recurringRules, setRecurringRulesState] = useState<RecurringAccountRule[]>(
@@ -7209,6 +7324,15 @@ export default function Home() {
     [loadError, setLoadError] = useState(""),
     [hydrated, setHydrated] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notify = (
+    message: string,
+    tone: "success" | "error" = "success",
+  ) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setNotice({ message, tone });
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 1900);
+  };
   const persist = (resource: string, value: unknown) => {
     void persistWorkspaceResource(resource, value).catch(() =>
       setLoadError("Uma alteração não foi salva. Verifique a conexão e tente novamente."),
@@ -7223,10 +7347,11 @@ export default function Home() {
     const saved = localStorage.getItem("atsoc-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
     const applyWorkspace = (data: WorkspacePayload) => {
-      updateParametersLocal({
-        ...DEFAULT_PARAMETERS,
-        ...((data.parameters || {}) as Partial<AtsocParameters>),
-      });
+      updateParametersLocal(
+        mergeAtsocParameters(
+          (data.parameters || {}) as Partial<AtsocParameters>,
+        ),
+      );
       setFinancialEntries((data.financialEntries || []) as FinancialEntry[]);
       setRecurringRulesState((data.recurringRules || []) as RecurringAccountRule[]);
       setTeamMembersState((data.teamMembers || INITIAL_TEAM_MEMBERS) as TeamMember[]);
@@ -7600,7 +7725,7 @@ export default function Home() {
         ),
         pricing: (
           <Pricing
-            open={open}
+            notify={notify}
             p={parameters}
             clients={activeClients}
             quotes={quoteRecords}
@@ -7640,7 +7765,7 @@ export default function Home() {
         ),
         settings: (
           <Config
-            open={open}
+            notify={notify}
             p={parameters}
             update={update}
             reset={reset}
@@ -7855,6 +7980,12 @@ export default function Home() {
           {!hydrated ? <div className="workspace-loading">Carregando dados protegidos...</div> : content}
         </div>
       </main>
+      {notice && (
+        <div className={`action-toast ${notice.tone}`} role="status">
+          {notice.tone === "success" ? <Check /> : <AlertTriangle />}
+          <span>{notice.message}</span>
+        </div>
+      )}
       {modal && <Modal state={modal} close={() => setModal(null)} />}
     </div>
   );

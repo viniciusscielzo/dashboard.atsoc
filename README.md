@@ -62,3 +62,14 @@ npm test
 - **Cotar** mantém o lead na etapa atual e vincula o valor salvo ao card do CRM.
 - O histórico de cotações permite exclusão individual.
 - Leads enviados ao follow-up podem voltar ao início da prospecção; nenhum lead precisa ser descartado.
+
+## Precificação por faixa horária
+
+- A carga operacional é calculada em blocos de 30 minutos.
+- Os fatores iniciais são: diurno 1,00; noturno 0,80; madrugada 0,50.
+- Os fatores ajustam FTE, capacidade simultânea, horas equivalentes e custo operacional.
+- As faixas são editáveis em **Configurações > Parâmetros operacionais**.
+- Dados já salvos recebem somente os novos parâmetros; leads, cotações, clientes e contas permanecem preservados.
+- A referência comercial histórica continua separada do piso financeiro para permitir comparação gerencial.
+
+As ações **Salvar** e **Gerar proposta** executam diretamente sua função e exibem apenas uma confirmação temporária, sem abrir formulários intermediários.

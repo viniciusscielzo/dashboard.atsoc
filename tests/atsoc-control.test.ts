@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_PARAMETERS,
+  adjustedClientLoad,
+  adjustedClientLoadAt,
   analyzeCapacity,
   calculateCommercialPricing,
   calculateDre,
@@ -13,13 +15,16 @@ import {
   commercialRound,
   coverageHours,
   discountDecision,
+  equivalentMonthlyHours,
   financialMinimumPrice,
   memberWorksOn,
+  mergeAtsocParameters,
   monthlyContractDueDates,
   preserveInstallmentOnContractAdjustment,
   safeClientsPerFte,
   theoreticalClientLoad,
   validateMarginPolicy,
+  validateOperationalTimeBands,
   weekSchedule,
   type ClientInput,
   type TeamMember,
@@ -40,6 +45,65 @@ test("horários atravessando meia-noite", () => {
   assert.equal(coverageHours("18:00", "00:00"), 6);
   assert.equal(coverageHours("22:00", "02:00"), 4);
 });
+test("madrugada reduz FTE e horas equivalentes por faixa horária", () => {
+  const q = structuredClone(DEFAULT_PARAMETERS);
+  const overnight: ClientInput = {
+    id: "overnight",
+    name: "Madrugada",
+    activeClients: 3000,
+    monthlyRevenue: 0,
+    schedule: weekSchedule("00:00", "06:00", [0, 1, 2, 3, 4, 5, 6]),
+  };
+  assert.equal(adjustedClientLoad(overnight, q), 0.25);
+  assert.equal(adjustedClientLoadAt(overnight, q, "02:00"), 0.25);
+  assert.ok(
+    Math.abs(equivalentMonthlyHours(overnight, q) - 6 * 7 * 4.345 * 0.25) < 0.001,
+  );
+});
+test("cotação de madrugada fica abaixo da diurna com o mesmo escopo", () => {
+  const q = structuredClone(DEFAULT_PARAMETERS);
+  q.fixedCosts = [];
+  q.commissions = [];
+  q.cacManual = 0;
+  q.commercialFloor = 0;
+  q.taxRate = 0;
+  q.roundingStrategy = "none";
+  const baseClient = {
+    id: "period-price",
+    name: "Comparação por horário",
+    activeClients: 3000,
+    monthlyRevenue: 0,
+  };
+  const daytime = calculateCommercialPricing(
+    { ...baseClient, schedule: weekSchedule("06:00", "12:00", [0, 1, 2, 3, 4, 5, 6]) },
+    q,
+  );
+  const overnight = calculateCommercialPricing(
+    { ...baseClient, schedule: weekSchedule("00:00", "06:00", [0, 1, 2, 3, 4, 5, 6]) },
+    q,
+  );
+  assert.ok(overnight.target.exactPrice < daytime.target.exactPrice);
+  assert.ok(Math.abs(overnight.operationalCost / daytime.operationalCost - 0.5) < 0.001);
+});
+test("faixas alteram a capacidade em cada bloco de 30 minutos", () => {
+  const q = structuredClone(DEFAULT_PARAMETERS);
+  const client: ClientInput = {
+    id: "crossing",
+    name: "Noturno e madrugada",
+    activeClients: 3000,
+    monthlyRevenue: 0,
+    schedule: weekSchedule("22:00", "02:00", [0]),
+  };
+  const result = analyzeCapacity([client], q);
+  assert.equal(result.slots.find((slot) => slot.day === 0 && slot.label === "23:30")?.requiredFte, 0.4);
+  assert.equal(result.slots.find((slot) => slot.day === 1 && slot.label === "00:30")?.requiredFte, 0.25);
+});
+test("migração adiciona faixas sem sobrescrever parâmetros existentes", () => {
+  const migrated = mergeAtsocParameters({ collaboratorMaxCost: 4100 });
+  assert.equal(migrated.collaboratorMaxCost, 4100);
+  assert.equal(migrated.operationalTimeBands.length, 3);
+  assert.equal(validateOperationalTimeBands(migrated.operationalTimeBands).valid, true);
+});
 test("sobreposição em blocos de 30 minutos e contratação segura", () => {
   p.availableOperationalFte = 1;
   const clients: ClientInput[] = [
@@ -59,8 +123,8 @@ test("sobreposição em blocos de 30 minutos e contratação segura", () => {
     },
   ];
   const a = analyzeCapacity(clients, p);
-  assert.equal(a.maxFte, 1);
-  assert.equal(a.safeStaff, 2);
+  assert.equal(a.maxFte, 0.8);
+  assert.equal(a.safeStaff, 1);
   assert.equal(a.peak.label, "22:00");
   assert.ok(
     a.slots.some(
