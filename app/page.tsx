@@ -332,7 +332,7 @@ const prepareAtsocTeamMembers = (members: TeamMember[]) =>
       : member;
   });
 
-const INITIAL_TEAM_MEMBERS: TeamMember[] = [
+const INITIAL_TEAM_MEMBERS: TeamMember[] = ([
   {
     id: "partner-vinicius",
     name: "Vinicius Scielzo",
@@ -389,7 +389,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     shiftEnd: "18:00",
     cycleStart: "2026-08-31",
   },
-].map(withAtsocPartnerSchedule);
+] satisfies TeamMember[]).map(withAtsocPartnerSchedule);
 
 const INITIAL_CLIENT_RECORDS: ClientRecord[] = [
   {
