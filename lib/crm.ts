@@ -80,17 +80,40 @@ export function crmStageLabel(stage: CrmStage, columns: CrmColumn[] = DEFAULT_CR
 
 export function normalizeCrmColumns(value: unknown): CrmColumn[] {
   if (!Array.isArray(value)) return DEFAULT_CRM_COLUMNS.map((column) => ({ ...column }));
-  const custom = value.filter((item): item is CrmColumn => Boolean(
+  const stored = value.filter((item): item is CrmColumn => Boolean(
     item && typeof item === "object" && typeof item.id === "string"
       && typeof item.label === "string" && typeof item.color === "string",
   ));
-  const merged = DEFAULT_CRM_COLUMNS.map((fallback) =>
-    custom.find((column) => column.id === fallback.id) || { ...fallback },
-  );
-  for (const column of custom) {
-    if (!merged.some((item) => item.id === column.id)) merged.push(column);
+  const merged = stored.map((column) => {
+    const fallback = DEFAULT_CRM_COLUMNS.find((item) => item.id === column.id);
+    return fallback ? { ...fallback, ...column, system: true } : { ...column, system: false };
+  });
+  for (const fallback of DEFAULT_CRM_COLUMNS) {
+    if (!merged.some((item) => item.id === fallback.id)) merged.push({ ...fallback });
   }
   return merged;
+}
+
+export function upsertCrmColumn(columns: CrmColumn[], column: CrmColumn): CrmColumn[] {
+  const normalized = {
+    ...column,
+    label: column.label.trim(),
+    color: column.color || "#4b9cff",
+  };
+  if (!normalized.id || !normalized.label) return columns;
+  return columns.some((item) => item.id === normalized.id)
+    ? columns.map((item) => item.id === normalized.id ? { ...item, ...normalized } : item)
+    : [...columns, normalized];
+}
+
+export function reorderCrmColumns(columns: CrmColumn[], sourceId: string, targetId: string): CrmColumn[] {
+  const sourceIndex = columns.findIndex((column) => column.id === sourceId);
+  const targetIndex = columns.findIndex((column) => column.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return columns;
+  const next = [...columns];
+  const [moved] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, moved);
+  return next;
 }
 
 export const CRM_ORIGINS = [

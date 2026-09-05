@@ -9,6 +9,8 @@ import {
   nextCrmStage,
   normalizeCrmColumns,
   restartCrmFollowUp,
+  reorderCrmColumns,
+  upsertCrmColumn,
   type CrmLead,
 } from "../lib/crm";
 
@@ -39,6 +41,30 @@ test("pipeline personalizado avança sem alterar os leads existentes", () => {
   assert.equal(nextCrmStage("negotiation", stages), "custom-reuniao");
   assert.equal(nextCrmStage("custom-reuniao", stages), null);
   assert.equal(normalizeCrmColumns(undefined).length, DEFAULT_CRM_COLUMNS.length);
+});
+
+test("nova coluna é acrescentada sem substituir as anteriores", () => {
+  const next = upsertCrmColumn(DEFAULT_CRM_COLUMNS, {
+    id: "custom-reuniao",
+    label: "Reunião agendada",
+    color: "#123456",
+  });
+  assert.equal(next.length, DEFAULT_CRM_COLUMNS.length + 1);
+  assert.equal(next.at(-1)?.label, "Reunião agendada");
+  assert.equal(next[0].id, DEFAULT_CRM_COLUMNS[0].id);
+});
+
+test("reordenar coluna mantém seu identificador e os vínculos dos leads", () => {
+  const custom = { id: "custom-reuniao", label: "Reunião", color: "#123456" };
+  const original = [...DEFAULT_CRM_COLUMNS, custom];
+  const reordered = reorderCrmColumns(original, custom.id, "contacted");
+  assert.equal(reordered[1].id, custom.id);
+  assert.equal(reordered.find((column) => column.id === custom.id), custom);
+  assert.equal(reordered.length, original.length);
+  assert.deepEqual(
+    normalizeCrmColumns(reordered).map((column) => column.id),
+    reordered.map((column) => column.id),
+  );
 });
 
 test("agenda separa ações atrasadas, de hoje e futuras", () => {

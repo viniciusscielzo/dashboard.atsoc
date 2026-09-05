@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -8,6 +8,8 @@ import {
   CalendarDays,
   Calculator,
   Check,
+  ChevronRight,
+  GripVertical,
   Pencil,
   Plus,
   RotateCcw,
@@ -28,7 +30,9 @@ import {
   filterCrmLeads,
   nextCrmStage,
   restartCrmFollowUp,
+  reorderCrmColumns,
   sortCrmActions,
+  upsertCrmColumn,
   type CrmColumn,
   type CrmLead,
   type CrmPeriod,
@@ -98,7 +102,10 @@ export function Crm({
     contractStart: localDate(),
   });
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [columnEditor, setColumnEditor] = useState<CrmColumn | null>(null);
+  const [focusedLeadId, setFocusedLeadId] = useState<string | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const activeStages = useMemo(() => columns.map((column) => column.id), [columns]);
 
@@ -186,21 +193,43 @@ export function Crm({
 
   const saveColumn = () => {
     if (!columnEditor?.label.trim()) return;
+    let targetColumnId = columnEditor.id;
     if (columnEditor.id) {
-      setColumns((current) => current.map((column) => column.id === columnEditor.id
-        ? { ...column, label: columnEditor.label.trim(), color: columnEditor.color }
-        : column));
+      setColumns((current) => upsertCrmColumn(current, { ...columnEditor, label: columnEditor.label.trim() }));
     } else {
       const id = `custom-${Date.now()}`;
-      setColumns((current) => [...current, { ...columnEditor, id, label: columnEditor.label.trim(), system: false }]);
+      targetColumnId = id;
+      setColumns((current) => upsertCrmColumn(current, { ...columnEditor, id, label: columnEditor.label.trim(), system: false }));
     }
     setColumnEditor(null);
+    setActionMode(false);
+    setView("active");
+    setPeriod("Tudo");
+    window.setTimeout(() => {
+      const column = document.getElementById(`crm-column-${targetColumnId}`);
+      column?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "end" });
+    }, 80);
   };
 
   const deleteColumn = (column: CrmColumn) => {
     if (column.system || leads.some((lead) => lead.stage === column.id)) return;
     setColumns((current) => current.filter((item) => item.id !== column.id));
     setColumnEditor(null);
+  };
+
+  const focusLead = (lead: CrmLead) => {
+    setActionMode(false);
+    setPeriod("Tudo");
+    setView(lead.stage === "lost" ? "lost" : "active");
+    setFocusedLeadId(lead.id);
+    window.setTimeout(() => {
+      document.getElementById(`crm-lead-${lead.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "center",
+      });
+    }, 80);
+    window.setTimeout(() => setFocusedLeadId(null), 2200);
   };
 
   const restartFollowUp = (lead: CrmLead) => {
@@ -268,38 +297,45 @@ export function Crm({
             const labels = { overdue: "Atrasadas", today: "Hoje", upcoming: "Próximas", unscheduled: "Sem data" };
             return <div className={`crm-action-group ${status}`} key={status}>
               <header><span>{status === "overdue" && <AlertTriangle />}{labels[status]}</span><b>{items.length}</b></header>
-              {items.map((lead) => <article key={lead.id}>
-                <div><strong>{lead.company}</strong><small>{lead.contact || "Contato não informado"}</small></div>
+              {items.map((lead) => <article className="crm-action-card" key={lead.id} role="button" tabIndex={0} onClick={() => focusLead(lead)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") focusLead(lead); }}>
+                <div className="crm-action-main"><strong>{lead.company}</strong><small>{lead.contact || "Contato não informado"}</small>{!!lead.tags?.length && <div className="crm-action-tags">{lead.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>}</div>
                 <span className="crm-stage-tag" style={{ "--stage-color": columns.find((column) => column.id === lead.stage)?.color || (lead.stage === "lost" ? "#ff6577" : "#4b9cff") } as CSSProperties}>{lead.stage === "lost" ? "Follow-up" : crmStageLabel(lead.stage, columns)}</span>
-                <span>{lead.nextActionDate ? new Date(`${lead.nextActionDate}T12:00:00`).toLocaleDateString("pt-BR") : "Definir data"}</span>
-                <div className="crm-action-row-buttons"><button onClick={() => editLead(lead)}><Pencil /> Editar</button>{lead.stage === "lost" ? <button onClick={() => restartFollowUp(lead)}><RotateCcw /> Retomar</button> : <button onClick={() => advance(lead)}>Avançar <ArrowUpRight /></button>}</div>
+                <div className="crm-action-date"><CalendarDays /><span>{lead.nextActionDate ? new Date(`${lead.nextActionDate}T12:00:00`).toLocaleDateString("pt-BR") : "Definir data"}</span></div>
+                <div className="crm-action-row-buttons"><button onClick={(event) => { event.stopPropagation(); editLead(lead); }}><Pencil /> Editar</button>{lead.stage === "lost" ? <button onClick={(event) => { event.stopPropagation(); restartFollowUp(lead); }}><RotateCcw /> Retomar</button> : <span className="crm-open-lead">Abrir no CRM <ChevronRight /></span>}</div>
               </article>)}
               {!items.length && <p className="crm-action-empty">Nenhuma ação nesta categoria.</p>}
             </div>;
           })}
         </section>
       ) : view === "active" ? (
-        <div className="crm-board">
+        <div className={`crm-board${columns.length > 5 ? " crm-board-scrollable" : ""}`} ref={boardRef} style={{ gridTemplateColumns: columns.length > 5 ? `repeat(${columns.length}, 260px)` : `repeat(${Math.max(columns.length, 1)}, minmax(220px, 1fr))` }}>
           {columns.map((column) => {
             const stage = column.id;
             const stageLeads = visible.filter((lead) => lead.stage === stage);
             return <section
-              className={`crm-column${draggedLeadId ? " drag-active" : ""}`}
+              className={`crm-column${draggedLeadId ? " drag-active" : ""}${draggedColumnId === stage ? " dragging-column" : ""}`}
               key={stage}
+              id={`crm-column-${stage}`}
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => {
-                if (draggedLeadId) moveToStage(draggedLeadId, stage);
+                if (draggedColumnId) setColumns((current) => reorderCrmColumns(current, draggedColumnId, stage));
+                else if (draggedLeadId) moveToStage(draggedLeadId, stage);
                 setDraggedLeadId(null);
+                setDraggedColumnId(null);
               }}
             >
-              <header style={{ borderTopColor: column.color }}><span>{column.label}</span><div className="crm-column-tools"><b>{stageLeads.length}</b>{!column.system && <button onClick={() => setColumnEditor({ ...column })} title="Editar coluna"><Pencil /></button>}</div></header>
+              <header style={{ borderTopColor: column.color }}>
+                <div className="crm-column-title"><button className="crm-column-drag" draggable onDragStart={(event) => { event.stopPropagation(); setDraggedLeadId(null); setDraggedColumnId(stage); }} onDragEnd={() => setDraggedColumnId(null)} title="Arrastar coluna"><GripVertical /></button><span>{column.label}</span></div>
+                <div className="crm-column-tools"><b>{stageLeads.length}</b><button onClick={() => setColumnEditor({ ...column })} title="Editar coluna"><Pencil /></button></div>
+              </header>
               <div className="crm-column-body">
                 {stageLeads.map((lead) => {
                   const leadQuotes = quotesByLead.get(lead.id) || [];
                   const latestQuote = leadQuotes[0];
                   return <article
-                    className="crm-card"
+                    className={`crm-card${focusedLeadId === lead.id ? " crm-card-focused" : ""}`}
                     key={lead.id}
+                    id={`crm-lead-${lead.id}`}
                     draggable
                     onDragStart={() => setDraggedLeadId(lead.id)}
                     onDragEnd={() => setDraggedLeadId(null)}
@@ -332,7 +368,7 @@ export function Crm({
       ) : (
         <section className="panel crm-list">
           <div className="panel-title"><div><h3>{view === "won" ? "Clientes ganhos" : "Follow-up de recuperação"}</h3><p>{view === "won" ? "Histórico do período selecionado" : "Nenhum lead é descartado: retome a prospecção quando for oportuno."}</p></div></div>
-          {visible.map((lead) => <article key={lead.id}>
+          {visible.map((lead) => <article className={focusedLeadId === lead.id ? "crm-card-focused" : ""} id={`crm-lead-${lead.id}`} key={lead.id}>
             <div><b>{lead.company}</b><small>{lead.contact || lead.origin}</small></div>
             <span>{brl(lead.estimatedValue)}</span>
             <span>{new Date(lead.updatedAt).toLocaleDateString("pt-BR")}</span>
