@@ -84,10 +84,14 @@ import {
   weekSchedule,
   type ClientInput,
   type DaySchedule,
+  defaultTeamWeeklySchedule,
   memberWorksOn,
+  teamScheduleForDate,
   SHIFT_CYCLES,
   type ShiftPattern,
+  type TeamDayStatus,
   type TeamMember,
+  type TeamScheduleOverride,
   type ScenarioKind,
 } from "@/lib/atsoc-control";
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
@@ -4480,33 +4484,38 @@ function Capacity({
         />
         <div className="roster-columns">
           {[
-            ["Em escala hoje", activeToday, "green"],
-            ["Em escala amanhã", activeTomorrow, "blue"],
-            ["Folga hoje", offToday, "orange"],
-          ].map(([label, list, tone]: any) => (
+            ["Em escala hoje", activeToday, "green", today],
+            ["Em escala amanhã", activeTomorrow, "blue", tomorrow],
+            ["Fora da operação hoje", offToday, "orange", today],
+          ].map(([label, list, tone, rosterDate]: any) => (
             <div key={label} className={`roster-column ${tone}`}>
               <header>
                 <b>{label}</b>
                 <Pill tone={tone}>{list.length}</Pill>
               </header>
-              {list.map((member: TeamMember) => (
-                <span key={member.id}>
-                  <div className="avatar">
-                    {member.name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </div>
-                  <span>
-                    <b>{member.name}</b>
-                    <small>
-                      {member.role} • {member.shiftPattern} •{" "}
-                      {member.shiftStart}–{member.shiftEnd}
-                    </small>
+              {list.map((member: TeamMember) => {
+                const schedule = teamScheduleForDate(member, rosterDate);
+                return (
+                  <span key={member.id}>
+                    <div className="avatar">
+                      {member.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
+                    <span>
+                      <b>{member.name}</b>
+                      <small>
+                        {member.role} • {schedule.works
+                          ? `${schedule.start}–${schedule.end}`
+                          : schedule.reason}
+                        {schedule.extraShift ? " • extra" : ""}
+                      </small>
+                    </span>
                   </span>
-                </span>
-              ))}
+                );
+              })}
               {!list.length && <em>Ninguém nesta condição.</em>}
             </div>
           ))}
@@ -4656,6 +4665,8 @@ function Team({
   ) => void;
 }) {
   const [draft, setDraft] = useState<TeamMember | null>(null);
+  const [occurrenceDraft, setOccurrenceDraft] =
+    useState<TeamScheduleOverride | null>(null);
   const today = localIsoDate();
   const tomorrow = shiftIsoDate(today, 1);
   const activeMembers = members.filter((member) => member.active);
@@ -4670,6 +4681,61 @@ function Team({
   const workingTomorrow = members.filter((member) =>
     memberWorksOn(member, tomorrow),
   );
+  const weekDays = [
+    "Domingo",
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+  ];
+  const occurrenceLabels: Record<TeamDayStatus, string> = {
+    work: "Trabalho / turno ajustado",
+    day_off: "Folga",
+    absence: "Falta / ausência",
+    medical_leave: "Afastamento / atestado",
+    vacation: "Férias",
+  };
+  const normalizeMember = (member: TeamMember): TeamMember => ({
+    ...member,
+    scheduleMode: member.scheduleMode || "cycle",
+    weeklySchedule:
+      member.weeklySchedule?.length === 7
+        ? member.weeklySchedule
+        : defaultTeamWeeklySchedule(member.shiftStart, member.shiftEnd),
+    scheduleOverrides: member.scheduleOverrides || [],
+  });
+  const startOccurrence = (member: TeamMember, item?: TeamScheduleOverride) => {
+    setOccurrenceDraft(
+      item || {
+        id: `occurrence-${Date.now()}`,
+        date: today,
+        status: "work",
+        start: member.shiftStart,
+        end: member.shiftEnd,
+        reason: "",
+        medicalCertificate: false,
+        extraShift: false,
+      },
+    );
+  };
+  const saveOccurrence = () => {
+    if (!draft || !occurrenceDraft?.date || !occurrenceDraft.reason.trim())
+      return;
+    setDraft({
+      ...draft,
+      scheduleOverrides: [
+        ...(draft.scheduleOverrides || []).filter(
+          (item) =>
+            item.id !== occurrenceDraft.id &&
+            item.date !== occurrenceDraft.date,
+        ),
+        occurrenceDraft,
+      ],
+    });
+    setOccurrenceDraft(null);
+  };
   const saveMember = () => {
     if (!draft?.name.trim() || !draft.role.trim()) return;
     setMembers((current) =>
@@ -4678,6 +4744,7 @@ function Team({
         : [...current, draft],
     );
     setDraft(null);
+    setOccurrenceDraft(null);
   };
   const addMember = () =>
     setDraft({
@@ -4693,6 +4760,9 @@ function Team({
       shiftStart: "08:00",
       shiftEnd: "18:00",
       cycleStart: today,
+      scheduleMode: "weekly",
+      weeklySchedule: defaultTeamWeeklySchedule("08:00", "18:00"),
+      scheduleOverrides: [],
     });
   const removeMember = (member: TeamMember) => {
     if (!window.confirm(`Excluir ${member.name} da equipe?`)) return;
@@ -4732,7 +4802,23 @@ function Team({
       </div>
       <div className="people">
         {members.map((member) => {
-          const worksToday = memberWorksOn(member, today);
+          const todaySchedule = teamScheduleForDate(member, today);
+          const worksToday = todaySchedule.works;
+          const statusLabel = !member.active
+            ? "Inativo"
+            : todaySchedule.status === "medical_leave"
+              ? todaySchedule.medicalCertificate
+                ? "Atestado hoje"
+                : "Atestado pendente"
+              : todaySchedule.status === "absence"
+                ? "Ausente hoje"
+                : todaySchedule.status === "vacation"
+                  ? "Férias"
+                  : worksToday && todaySchedule.extraShift
+                    ? "Extra hoje"
+                    : worksToday
+                      ? "Em escala hoje"
+                      : "Folga hoje";
           return (
             <article
               key={member.id}
@@ -4756,26 +4842,40 @@ function Team({
               <span className="member-data">
                 <small>Escala e horário</small>
                 <b>
-                  {member.shiftPattern} • {member.shiftStart}–{member.shiftEnd}
+                  {(member.scheduleMode || "cycle") === "weekly"
+                    ? "Semanal"
+                    : member.shiftPattern} • {todaySchedule.start}–
+                  {todaySchedule.end}
                 </b>
+                {todaySchedule.source === "override" && (
+                  <small title={todaySchedule.reason}>Ajuste do dia</small>
+                )}
               </span>
               <span className="member-data">
                 <small>Horas produtivas</small>
                 <b>{member.hours}h/mês</b>
               </span>
               <Pill
-                tone={member.active ? (worksToday ? "green" : "orange") : "red"}
+                tone={
+                  !member.active ||
+                  todaySchedule.status === "absence" ||
+                  (todaySchedule.status === "medical_leave" &&
+                    !todaySchedule.medicalCertificate)
+                    ? "red"
+                    : worksToday
+                      ? "green"
+                      : "orange"
+                }
               >
-                {!member.active
-                  ? "Inativo"
-                  : worksToday
-                    ? "Em escala hoje"
-                    : "Folga hoje"}
+                {statusLabel}
               </Pill>
               <div className="row-actions">
                 <button
                   className="icon"
-                  onClick={() => setDraft({ ...member })}
+                  onClick={() => {
+                    setDraft(normalizeMember(member));
+                    setOccurrenceDraft(null);
+                  }}
                   title="Editar colaborador"
                   aria-label={`Editar ${member.name}`}
                 >
@@ -4798,7 +4898,8 @@ function Team({
         <div
           className="modal-bg"
           onMouseDown={(event) =>
-            event.currentTarget === event.target && setDraft(null)
+            event.currentTarget === event.target &&
+            (setDraft(null), setOccurrenceDraft(null))
           }
         >
           <div className="modal team-editor">
@@ -4811,7 +4912,13 @@ function Team({
                     : "Adicionar pessoa"}
                 </h3>
               </div>
-              <button className="icon" onClick={() => setDraft(null)}>
+              <button
+                className="icon"
+                onClick={() => {
+                  setDraft(null);
+                  setOccurrenceDraft(null);
+                }}
+              >
                 <X />
               </button>
             </div>
@@ -4905,23 +5012,29 @@ function Team({
                 </select>
               </label>
               <label>
-                Escala
+                Modelo da escala
                 <select
-                  value={draft.shiftPattern}
+                  value={draft.scheduleMode || "cycle"}
                   onChange={(event) =>
                     setDraft({
                       ...draft,
-                      shiftPattern: event.target.value as ShiftPattern,
+                      scheduleMode: event.target.value as "cycle" | "weekly",
+                      weeklySchedule:
+                        draft.weeklySchedule?.length === 7
+                          ? draft.weeklySchedule
+                          : defaultTeamWeeklySchedule(
+                              draft.shiftStart,
+                              draft.shiftEnd,
+                            ),
                     })
                   }
                 >
-                  {Object.keys(SHIFT_CYCLES).map((shift) => (
-                    <option key={shift}>{shift}</option>
-                  ))}
+                  <option value="weekly">Dias da semana personalizados</option>
+                  <option value="cycle">Ciclo automático (5x2, 6x1...)</option>
                 </select>
               </label>
               <label>
-                Início do turno
+                Horário-base de entrada
                 <input
                   type="time"
                   value={draft.shiftStart}
@@ -4931,7 +5044,7 @@ function Team({
                 />
               </label>
               <label>
-                Fim do turno
+                Horário-base de saída
                 <input
                   type="time"
                   value={draft.shiftEnd}
@@ -4940,23 +5053,296 @@ function Team({
                   }
                 />
               </label>
-              <label className="full-field">
-                Primeiro dia trabalhado do ciclo
-                <input
-                  type="date"
-                  value={draft.cycleStart}
-                  onChange={(event) =>
-                    setDraft({ ...draft, cycleStart: event.target.value })
-                  }
-                />
-                <small>
-                  Esta data ancora automaticamente as folgas futuras da escala{" "}
-                  {draft.shiftPattern}.
-                </small>
-              </label>
+              {(draft.scheduleMode || "cycle") === "cycle" && (
+                <>
+                  <label>
+                    Escala de ciclo
+                    <select
+                      value={draft.shiftPattern}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          shiftPattern: event.target.value as ShiftPattern,
+                        })
+                      }
+                    >
+                      {Object.keys(SHIFT_CYCLES).map((shift) => (
+                        <option key={shift}>{shift}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Primeiro dia trabalhado do ciclo
+                    <input
+                      type="date"
+                      value={draft.cycleStart}
+                      onChange={(event) =>
+                        setDraft({ ...draft, cycleStart: event.target.value })
+                      }
+                    />
+                    <small>
+                      A data ancora automaticamente as folgas da escala {draft.shiftPattern}.
+                    </small>
+                  </label>
+                </>
+              )}
             </div>
+            {(draft.scheduleMode || "cycle") === "weekly" && (
+              <section className="team-schedule-section">
+                <div className="team-section-title">
+                  <div>
+                    <b>Dias e horários habituais</b>
+                    <small>Marque exatamente os dias em que a pessoa trabalha.</small>
+                  </div>
+                </div>
+                <div className="team-week-grid">
+                  {(draft.weeklySchedule ||
+                    defaultTeamWeeklySchedule(draft.shiftStart, draft.shiftEnd)
+                  ).map((shift) => (
+                    <div className="team-week-row" key={shift.day}>
+                      <label className="team-day-toggle">
+                        <input
+                          type="checkbox"
+                          checked={shift.enabled}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weeklySchedule: (draft.weeklySchedule || []).map(
+                                (item) =>
+                                  item.day === shift.day
+                                    ? { ...item, enabled: event.target.checked }
+                                    : item,
+                              ),
+                            })
+                          }
+                        />
+                        <b>{weekDays[shift.day]}</b>
+                      </label>
+                      {shift.enabled ? (
+                        <div className="team-day-hours">
+                          <input
+                            type="time"
+                            value={shift.start}
+                            aria-label={`Entrada de ${weekDays[shift.day]}`}
+                            onChange={(event) =>
+                              setDraft({
+                                ...draft,
+                                weeklySchedule: (draft.weeklySchedule || []).map(
+                                  (item) =>
+                                    item.day === shift.day
+                                      ? { ...item, start: event.target.value }
+                                      : item,
+                                ),
+                              })
+                            }
+                          />
+                          <span>até</span>
+                          <input
+                            type="time"
+                            value={shift.end}
+                            aria-label={`Saída de ${weekDays[shift.day]}`}
+                            onChange={(event) =>
+                              setDraft({
+                                ...draft,
+                                weeklySchedule: (draft.weeklySchedule || []).map(
+                                  (item) =>
+                                    item.day === shift.day
+                                      ? { ...item, end: event.target.value }
+                                      : item,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <span className="team-day-off">Folga habitual</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            <section className="team-schedule-section">
+              <div className="team-section-title">
+                <div>
+                  <b>Ajustes e ocorrências por data</b>
+                  <small>
+                    Têm prioridade sobre a escala: folga, falta, atestado, férias ou extra.
+                  </small>
+                </div>
+                <Button kind="ghost" onClick={() => startOccurrence(draft)}>
+                  <Plus /> Nova ocorrência
+                </Button>
+              </div>
+              {occurrenceDraft && (
+                <div className="team-occurrence-form">
+                  <label>
+                    Data
+                    <input
+                      type="date"
+                      value={occurrenceDraft.date}
+                      onChange={(event) =>
+                        setOccurrenceDraft({
+                          ...occurrenceDraft,
+                          date: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Situação
+                    <select
+                      value={occurrenceDraft.status}
+                      onChange={(event) =>
+                        setOccurrenceDraft({
+                          ...occurrenceDraft,
+                          status: event.target.value as TeamDayStatus,
+                          extraShift:
+                            event.target.value === "work"
+                              ? occurrenceDraft.extraShift
+                              : false,
+                        })
+                      }
+                    >
+                      {Object.entries(occurrenceLabels).map(([value, label]) => (
+                        <option value={value} key={value}>{label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {occurrenceDraft.status === "work" && (
+                    <>
+                      <label>
+                        Entrada
+                        <input
+                          type="time"
+                          value={occurrenceDraft.start}
+                          onChange={(event) =>
+                            setOccurrenceDraft({
+                              ...occurrenceDraft,
+                              start: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Saída
+                        <input
+                          type="time"
+                          value={occurrenceDraft.end}
+                          onChange={(event) =>
+                            setOccurrenceDraft({
+                              ...occurrenceDraft,
+                              end: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  <label className="team-occurrence-reason">
+                    Motivo / observação
+                    <input
+                      value={occurrenceDraft.reason}
+                      placeholder="Ex.: troca de plantão, consulta médica..."
+                      onChange={(event) =>
+                        setOccurrenceDraft({
+                          ...occurrenceDraft,
+                          reason: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  {(occurrenceDraft.status === "absence" ||
+                    occurrenceDraft.status === "medical_leave") && (
+                    <label className="team-check-field">
+                      <input
+                        type="checkbox"
+                        checked={occurrenceDraft.medicalCertificate}
+                        onChange={(event) =>
+                          setOccurrenceDraft({
+                            ...occurrenceDraft,
+                            medicalCertificate: event.target.checked,
+                          })
+                        }
+                      />
+                      Atestado entregue
+                    </label>
+                  )}
+                  {occurrenceDraft.status === "work" && (
+                    <label className="team-check-field">
+                      <input
+                        type="checkbox"
+                        checked={occurrenceDraft.extraShift}
+                        onChange={(event) =>
+                          setOccurrenceDraft({
+                            ...occurrenceDraft,
+                            extraShift: event.target.checked,
+                          })
+                        }
+                      />
+                      Turno / hora extra
+                    </label>
+                  )}
+                  <div className="team-occurrence-actions">
+                    <Button kind="ghost" onClick={() => setOccurrenceDraft(null)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={saveOccurrence}
+                      disabled={!occurrenceDraft.date || !occurrenceDraft.reason.trim()}
+                    >
+                      <Check /> Registrar
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="team-occurrence-list">
+                {[...(draft.scheduleOverrides || [])]
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((item) => (
+                    <article key={item.id}>
+                      <div>
+                        <b>{new Date(`${item.date}T12:00:00`).toLocaleDateString("pt-BR")}</b>
+                        <span>{occurrenceLabels[item.status]}</span>
+                        {item.status === "work" && <small>{item.start}–{item.end}</small>}
+                      </div>
+                      <p>{item.reason}</p>
+                      <div className="team-occurrence-tags">
+                        {(item.status === "absence" || item.status === "medical_leave") && (
+                          <Pill tone={item.medicalCertificate ? "green" : "red"}>
+                            {item.medicalCertificate ? "Atestado entregue" : "Atestado pendente"}
+                          </Pill>
+                        )}
+                        {item.extraShift && <Pill tone="blue">Extra</Pill>}
+                      </div>
+                      <div className="row-actions">
+                        <button className="icon" onClick={() => startOccurrence(draft, item)} title="Editar ocorrência"><Pencil /></button>
+                        <button
+                          className="icon danger"
+                          title="Excluir ocorrência"
+                          onClick={() => setDraft({
+                            ...draft,
+                            scheduleOverrides: (draft.scheduleOverrides || []).filter(
+                              (occurrence) => occurrence.id !== item.id,
+                            ),
+                          })}
+                        ><Trash2 /></button>
+                      </div>
+                    </article>
+                  ))}
+                {!draft.scheduleOverrides?.length && (
+                  <p className="team-no-occurrences">Nenhum ajuste específico cadastrado.</p>
+                )}
+              </div>
+            </section>
             <div className="modal-actions">
-              <Button kind="ghost" onClick={() => setDraft(null)}>
+              <Button
+                kind="ghost"
+                onClick={() => {
+                  setDraft(null);
+                  setOccurrenceDraft(null);
+                }}
+              >
                 Cancelar
               </Button>
               <Button

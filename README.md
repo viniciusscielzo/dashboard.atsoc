@@ -86,3 +86,12 @@ npm test
 - A referência comercial histórica continua separada do piso financeiro para permitir comparação gerencial.
 
 As ações **Salvar** e **Gerar proposta** executam diretamente sua função e exibem apenas uma confirmação temporária, sem abrir formulários intermediários.
+
+## Equipe, escalas e ocorrências
+
+- Em **Equipe > Editar pessoa**, escolha uma escala por ciclo ou dias da semana personalizados.
+- Na escala semanal, cada dia possui marcação de trabalho/folga e horários próprios de entrada e saída.
+- Em **Ajustes e ocorrências por data**, registre folga, falta, afastamento/atestado, férias ou trabalho extraordinário.
+- Toda ocorrência exige um motivo; faltas e afastamentos registram se o atestado foi entregue, e trabalhos ajustados podem ser marcados como extra.
+- A ocorrência do dia prevalece sobre a escala habitual e atualiza automaticamente os cards de Equipe e a disponibilidade em Operação e Capacidade.
+- Colaboradores já cadastrados permanecem intactos e continuam usando sua escala de ciclo até serem alterados.

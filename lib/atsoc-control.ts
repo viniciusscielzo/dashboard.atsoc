@@ -39,6 +39,29 @@ export function preserveInstallmentOnContractAdjustment(
   return status === "Recebido" || installmentDate < effectiveDate;
 }
 export type ShiftPattern = "4x2" | "6x1" | "5x2" | "12x36" | "2x2";
+export type TeamScheduleMode = "cycle" | "weekly";
+export type TeamDayStatus =
+  | "work"
+  | "day_off"
+  | "absence"
+  | "medical_leave"
+  | "vacation";
+export type TeamWeeklyShift = {
+  day: number;
+  enabled: boolean;
+  start: string;
+  end: string;
+};
+export type TeamScheduleOverride = {
+  id: string;
+  date: string;
+  status: TeamDayStatus;
+  start: string;
+  end: string;
+  reason: string;
+  medicalCertificate: boolean;
+  extraShift: boolean;
+};
 export type TeamMember = {
   id: string;
   name: string;
@@ -52,6 +75,9 @@ export type TeamMember = {
   shiftStart: string;
   shiftEnd: string;
   cycleStart: string;
+  scheduleMode?: TeamScheduleMode;
+  weeklySchedule?: TeamWeeklyShift[];
+  scheduleOverrides?: TeamScheduleOverride[];
 };
 export const SHIFT_CYCLES: Record<
   ShiftPattern,
@@ -63,8 +89,83 @@ export const SHIFT_CYCLES: Record<
   "12x36": { work: 1, cycle: 2 },
   "2x2": { work: 2, cycle: 4 },
 };
-export function memberWorksOn(member: TeamMember, date: string) {
-  if (!member.active || !member.operational || !member.cycleStart) return false;
+export function defaultTeamWeeklySchedule(start = "08:00", end = "18:00") {
+  return Array.from({ length: 7 }, (_, day) => ({
+    day,
+    enabled: day >= 1 && day <= 5,
+    start,
+    end,
+  }));
+}
+export function teamScheduleForDate(member: TeamMember, date: string) {
+  const occurrence = member.scheduleOverrides?.find(
+    (item) => item.date === date,
+  );
+  if (!member.active) {
+    return {
+      works: false,
+      status: "inactive" as const,
+      start: member.shiftStart,
+      end: member.shiftEnd,
+      reason: "Pessoa inativa",
+      medicalCertificate: false,
+      extraShift: false,
+      source: "cycle" as const,
+    };
+  }
+  if (!member.operational) {
+    return {
+      works: false,
+      status: "non_operational" as const,
+      start: member.shiftStart,
+      end: member.shiftEnd,
+      reason: "Não atua na operação",
+      medicalCertificate: false,
+      extraShift: false,
+      source: "cycle" as const,
+    };
+  }
+  if (occurrence) {
+    return {
+      works: occurrence.status === "work",
+      status: occurrence.status,
+      start: occurrence.start || member.shiftStart,
+      end: occurrence.end || member.shiftEnd,
+      reason: occurrence.reason,
+      medicalCertificate: occurrence.medicalCertificate,
+      extraShift: occurrence.extraShift,
+      source: "override" as const,
+    };
+  }
+  if (member.scheduleMode === "weekly") {
+    const day = new Date(`${date}T12:00:00`).getDay();
+    const shift = (member.weeklySchedule?.length
+      ? member.weeklySchedule
+      : defaultTeamWeeklySchedule(member.shiftStart, member.shiftEnd)
+    ).find((item) => item.day === day);
+    return {
+      works: Boolean(shift?.enabled),
+      status: shift?.enabled ? ("work" as const) : ("day_off" as const),
+      start: shift?.start || member.shiftStart,
+      end: shift?.end || member.shiftEnd,
+      reason: shift?.enabled ? "Escala semanal" : "Folga da escala semanal",
+      medicalCertificate: false,
+      extraShift: false,
+      source: "weekly" as const,
+    };
+  }
+  if (!member.cycleStart) {
+    return {
+      works: false,
+      status: "day_off" as const,
+      start: member.shiftStart,
+      end: member.shiftEnd,
+      reason: "Escala sem data inicial",
+      medicalCertificate: false,
+      extraShift: false,
+      source: "cycle" as const,
+    };
+  }
   const rule = SHIFT_CYCLES[member.shiftPattern];
   const elapsed = Math.floor(
     (new Date(`${date}T12:00:00`).getTime() -
@@ -72,7 +173,20 @@ export function memberWorksOn(member: TeamMember, date: string) {
       86_400_000,
   );
   const cycleDay = ((elapsed % rule.cycle) + rule.cycle) % rule.cycle;
-  return cycleDay < rule.work;
+  const works = cycleDay < rule.work;
+  return {
+    works,
+    status: works ? ("work" as const) : ("day_off" as const),
+    start: member.shiftStart,
+    end: member.shiftEnd,
+    reason: works ? `Escala ${member.shiftPattern}` : `Folga da escala ${member.shiftPattern}`,
+    medicalCertificate: false,
+    extraShift: false,
+    source: "cycle" as const,
+  };
+}
+export function memberWorksOn(member: TeamMember, date: string) {
+  return teamScheduleForDate(member, date).works;
 }
 export type ClientInput = {
   id: string;

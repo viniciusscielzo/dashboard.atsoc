@@ -17,7 +17,9 @@ import {
   discountDecision,
   equivalentMonthlyHours,
   financialMinimumPrice,
+  defaultTeamWeeklySchedule,
   memberWorksOn,
+  teamScheduleForDate,
   mergeAtsocParameters,
   monthlyContractDueDates,
   preserveInstallmentOnContractAdjustment,
@@ -337,6 +339,74 @@ test("escalas operacionais calculam trabalho e folga pelo ciclo", () => {
     false,
   );
   assert.equal(memberWorksOn({ ...base, active: false }, "2026-08-01"), false);
+});
+test("escala semanal respeita os dias e horários cadastrados", () => {
+  const base: TeamMember = {
+    id: "weekly-agent",
+    name: "Agente semanal",
+    role: "Atendente",
+    kind: "collaborator",
+    cost: 3300,
+    hours: 176,
+    active: true,
+    operational: true,
+    shiftPattern: "5x2",
+    shiftStart: "08:00",
+    shiftEnd: "18:00",
+    cycleStart: "2026-08-31",
+    scheduleMode: "weekly",
+    weeklySchedule: defaultTeamWeeklySchedule("09:00", "17:00"),
+  };
+  assert.equal(memberWorksOn(base, "2026-09-04"), true);
+  assert.equal(memberWorksOn(base, "2026-09-05"), false);
+  assert.equal(teamScheduleForDate(base, "2026-09-04").start, "09:00");
+});
+test("ocorrência do dia prevalece sobre a escala e registra atestado ou extra", () => {
+  const base: TeamMember = {
+    id: "override-agent",
+    name: "Agente",
+    role: "Atendente",
+    kind: "collaborator",
+    cost: 3300,
+    hours: 176,
+    active: true,
+    operational: true,
+    shiftPattern: "5x2",
+    shiftStart: "08:00",
+    shiftEnd: "18:00",
+    cycleStart: "2026-08-31",
+    scheduleMode: "weekly",
+    weeklySchedule: defaultTeamWeeklySchedule(),
+    scheduleOverrides: [
+      {
+        id: "absence",
+        date: "2026-09-04",
+        status: "medical_leave",
+        start: "",
+        end: "",
+        reason: "Consulta médica",
+        medicalCertificate: true,
+        extraShift: false,
+      },
+      {
+        id: "extra",
+        date: "2026-09-05",
+        status: "work",
+        start: "12:00",
+        end: "18:00",
+        reason: "Cobertura extraordinária",
+        medicalCertificate: false,
+        extraShift: true,
+      },
+    ],
+  };
+  const leave = teamScheduleForDate(base, "2026-09-04");
+  const extra = teamScheduleForDate(base, "2026-09-05");
+  assert.equal(leave.works, false);
+  assert.equal(leave.medicalCertificate, true);
+  assert.equal(extra.works, true);
+  assert.equal(extra.extraShift, true);
+  assert.equal(extra.start, "12:00");
 });
 test("contratação em cenário entra como custo e nunca como receita", () => {
   const q = structuredClone(DEFAULT_PARAMETERS);
