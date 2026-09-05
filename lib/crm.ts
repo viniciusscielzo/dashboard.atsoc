@@ -84,7 +84,7 @@ export function normalizeCrmColumns(value: unknown): CrmColumn[] {
     item && typeof item === "object" && typeof item.id === "string"
       && typeof item.label === "string" && typeof item.color === "string",
   ));
-  const merged = stored.map((column) => {
+  const merged: CrmColumn[] = stored.map((column) => {
     const fallback = DEFAULT_CRM_COLUMNS.find((item) => item.id === column.id);
     return fallback ? { ...fallback, ...column, system: true } : { ...column, system: false };
   });
