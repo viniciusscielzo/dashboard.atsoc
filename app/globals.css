@@ -5112,23 +5112,47 @@ textarea {
 .team-section-title > div { display: flex; flex-direction: column; gap: 3px; }
 .team-section-title b { font-size: 11px; }
 .team-section-title small { color: var(--muted); font-size: 8px; }
-.team-week-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.team-head-actions { display: flex; align-items: center; gap: 8px; }
+.team-week-grid { display: grid; grid-template-columns: 1fr; gap: 7px; }
 .team-week-row {
   min-height: 47px;
-  display: flex;
+  display: grid !important;
+  grid-template-columns: minmax(150px, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #0d1b30;
 }
-.team-day-toggle { display: flex; align-items: center; gap: 7px; font-size: 9px; }
-.team-day-toggle input,
-.team-check-field input { width: 15px; height: 15px; margin: 0; }
+.team-day-toggle,
+.team-rotation-toggle {
+  width: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 9px;
+}
+.team-day-toggle input[type="checkbox"],
+.team-rotation-toggle input[type="checkbox"],
+.team-check-field input[type="checkbox"] {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  flex: 0 0 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  accent-color: #2f80ed;
+}
 .team-day-hours { display: flex; align-items: center; gap: 5px; }
-.team-day-hours input { width: 92px; min-height: 31px; padding: 5px 7px; }
+.team-day-hours input[type="time"] {
+  width: 118px !important;
+  min-height: 34px;
+  padding: 5px 9px;
+}
 .team-day-hours span,
 .team-day-off { color: var(--muted); font-size: 8px; }
 .team-occurrence-form {
@@ -5148,7 +5172,13 @@ textarea {
   font-size: 8px;
 }
 .team-occurrence-reason { grid-column: 1 / 4; }
-.team-check-field { display: flex; align-items: center; gap: 7px; font-size: 9px; }
+.team-check-field {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+}
 .team-occurrence-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -5174,21 +5204,51 @@ textarea {
 .team-occurrence-list p { margin: 0; }
 .team-occurrence-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .team-no-occurrences { margin: 0; padding: 9px; color: var(--muted); font-size: 8px; text-align: center; }
+.team-weekend-rotation {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #31577f;
+  border-radius: 10px;
+  background: #10213a;
+}
+.team-rotation-toggle { align-items: flex-start; }
+.team-rotation-toggle > span { display: flex; flex-direction: column; gap: 3px; }
+.team-rotation-toggle b { color: var(--text); font-size: 10px; }
+.team-rotation-toggle small { color: var(--muted); font-size: 8px; font-weight: 500; }
+.team-rotation-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.team-rotation-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 8px;
+}
 .shell.light .team-schedule-section,
 .shell.light .team-week-row,
 .shell.light .team-occurrence-list > article { background: #f7faff; }
-.shell.light .team-occurrence-form { background: #eef5ff; }
+.shell.light .team-occurrence-form,
+.shell.light .team-weekend-rotation { background: #eef5ff; }
 @media (max-width: 800px) {
-  .team-week-grid { grid-template-columns: 1fr; }
   .team-occurrence-form { grid-template-columns: 1fr 1fr; }
   .team-occurrence-reason { grid-column: 1 / -1; }
   .team-occurrence-list > article { grid-template-columns: 1fr; }
   .team-occurrence-list > article > .row-actions { justify-self: end; }
+  .team-rotation-fields { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 520px) {
+  .team-head-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .team-section-title { align-items: flex-start; flex-direction: column; }
   .team-occurrence-form { grid-template-columns: 1fr; }
   .team-occurrence-reason,
   .team-occurrence-actions { grid-column: 1; }
-  .team-week-row { align-items: flex-start; flex-direction: column; }
+  .team-week-row { grid-template-columns: 1fr; align-items: flex-start; }
+  .team-day-hours { width: 100%; }
+  .team-day-hours input[type="time"] { width: 100% !important; }
+  .team-rotation-fields { grid-template-columns: 1fr; }
 }

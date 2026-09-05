@@ -94,4 +94,7 @@ As ações **Salvar** e **Gerar proposta** executam diretamente sua função e e
 - Em **Ajustes e ocorrências por data**, registre folga, falta, afastamento/atestado, férias ou trabalho extraordinário.
 - Toda ocorrência exige um motivo; faltas e afastamentos registram se o atestado foi entregue, e trabalhos ajustados podem ser marcados como extra.
 - A ocorrência do dia prevalece sobre a escala habitual e atualiza automaticamente os cards de Equipe e a disponibilidade em Operação e Capacidade.
-- Colaboradores já cadastrados permanecem intactos e continuam usando sua escala de ciclo até serem alterados.
+- Colaboradores já cadastrados e suas ocorrências permanecem intactos; apenas a antiga escala genérica dos três sócios é migrada para os horários informados.
+- O botão **Aplicar escala dos sócios** configura a cobertura atual da ATSOC: Gabriel de 08h às 11h45, Vinicius de 11h45 às 18h30 e Carlos de 18h30 às 00h nos dias úteis; Carlos cobre sábado de 09h às 14h30.
+- Vinicius e Gabriel possuem revezamento quinzenal: um cobre sábado de 14h30 às 20h e o outro domingo de 09h às 15h; na semana seguinte, as posições são invertidas automaticamente.
+- A data inicial e quem começa no sábado podem ser alterados no cadastro, sem perder ocorrências anteriores.

@@ -62,6 +62,15 @@ export type TeamScheduleOverride = {
   medicalCertificate: boolean;
   extraShift: boolean;
 };
+export type TeamWeekendRotation = {
+  enabled: boolean;
+  anchorDate: string;
+  firstWeekendDay: 0 | 6;
+  saturdayStart: string;
+  saturdayEnd: string;
+  sundayStart: string;
+  sundayEnd: string;
+};
 export type TeamMember = {
   id: string;
   name: string;
@@ -78,6 +87,7 @@ export type TeamMember = {
   scheduleMode?: TeamScheduleMode;
   weeklySchedule?: TeamWeeklyShift[];
   scheduleOverrides?: TeamScheduleOverride[];
+  weekendRotation?: TeamWeekendRotation;
 };
 export const SHIFT_CYCLES: Record<
   ShiftPattern,
@@ -137,12 +147,49 @@ export function teamScheduleForDate(member: TeamMember, date: string) {
       source: "override" as const,
     };
   }
+  const targetDay = new Date(`${date}T12:00:00`).getDay();
+  if (
+    member.weekendRotation?.enabled &&
+    member.weekendRotation.anchorDate &&
+    (targetDay === 0 || targetDay === 6)
+  ) {
+    const anchor = new Date(`${member.weekendRotation.anchorDate}T12:00:00`);
+    const target = new Date(`${date}T12:00:00`);
+    const elapsedWeeks = Math.floor(
+      (target.getTime() - anchor.getTime()) / (7 * 86_400_000),
+    );
+    const normalizedWeek = ((elapsedWeeks % 2) + 2) % 2;
+    const scheduledDay =
+      normalizedWeek === 0
+        ? member.weekendRotation.firstWeekendDay
+        : member.weekendRotation.firstWeekendDay === 6
+          ? 0
+          : 6;
+    const works = targetDay === scheduledDay;
+    return {
+      works,
+      status: works ? ("work" as const) : ("day_off" as const),
+      start:
+        targetDay === 6
+          ? member.weekendRotation.saturdayStart
+          : member.weekendRotation.sundayStart,
+      end:
+        targetDay === 6
+          ? member.weekendRotation.saturdayEnd
+          : member.weekendRotation.sundayEnd,
+      reason: works
+        ? "Revezamento quinzenal de fim de semana"
+        : "Folga do revezamento de fim de semana",
+      medicalCertificate: false,
+      extraShift: false,
+      source: "rotation" as const,
+    };
+  }
   if (member.scheduleMode === "weekly") {
-    const day = new Date(`${date}T12:00:00`).getDay();
     const shift = (member.weeklySchedule?.length
       ? member.weeklySchedule
       : defaultTeamWeeklySchedule(member.shiftStart, member.shiftEnd)
-    ).find((item) => item.day === day);
+    ).find((item) => item.day === targetDay);
     return {
       works: Boolean(shift?.enabled),
       status: shift?.enabled ? ("work" as const) : ("day_off" as const),

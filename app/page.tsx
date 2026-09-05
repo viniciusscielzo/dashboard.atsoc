@@ -92,6 +92,7 @@ import {
   type TeamDayStatus,
   type TeamMember,
   type TeamScheduleOverride,
+  type TeamWeeklyShift,
   type ScenarioKind,
 } from "@/lib/atsoc-control";
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
@@ -227,6 +228,110 @@ type ScenarioRecord = {
   notes?: string;
 };
 
+const memberWeek = (
+  shifts: Partial<Record<number, [string, string]>>,
+): TeamWeeklyShift[] =>
+  Array.from({ length: 7 }, (_, day) => ({
+    day,
+    enabled: Boolean(shifts[day]),
+    start: shifts[day]?.[0] || "08:00",
+    end: shifts[day]?.[1] || "18:00",
+  }));
+
+const withAtsocPartnerSchedule = (member: TeamMember): TeamMember => {
+  if (member.id === "partner-gabriel") {
+    return {
+      ...member,
+      scheduleMode: "weekly",
+      shiftStart: "08:00",
+      shiftEnd: "11:45",
+      weeklySchedule: memberWeek({
+        1: ["08:00", "11:45"],
+        2: ["08:00", "11:45"],
+        3: ["08:00", "11:45"],
+        4: ["08:00", "11:45"],
+        5: ["08:00", "11:45"],
+      }),
+      weekendRotation: {
+        enabled: true,
+        anchorDate: "2026-09-05",
+        firstWeekendDay: 6,
+        saturdayStart: "14:30",
+        saturdayEnd: "20:00",
+        sundayStart: "09:00",
+        sundayEnd: "15:00",
+      },
+      scheduleOverrides: member.scheduleOverrides || [],
+    };
+  }
+  if (member.id === "partner-vinicius") {
+    return {
+      ...member,
+      scheduleMode: "weekly",
+      shiftStart: "11:45",
+      shiftEnd: "18:30",
+      weeklySchedule: memberWeek({
+        1: ["11:45", "18:30"],
+        2: ["11:45", "18:30"],
+        3: ["11:45", "18:30"],
+        4: ["11:45", "18:30"],
+        5: ["11:45", "18:30"],
+      }),
+      weekendRotation: {
+        enabled: true,
+        anchorDate: "2026-09-05",
+        firstWeekendDay: 0,
+        saturdayStart: "14:30",
+        saturdayEnd: "20:00",
+        sundayStart: "09:00",
+        sundayEnd: "15:00",
+      },
+      scheduleOverrides: member.scheduleOverrides || [],
+    };
+  }
+  if (member.id === "partner-carlos") {
+    return {
+      ...member,
+      scheduleMode: "weekly",
+      shiftStart: "18:30",
+      shiftEnd: "00:00",
+      weeklySchedule: memberWeek({
+        1: ["18:30", "00:00"],
+        2: ["18:30", "00:00"],
+        3: ["18:30", "00:00"],
+        4: ["18:30", "00:00"],
+        5: ["18:30", "00:00"],
+        6: ["09:00", "14:30"],
+      }),
+      weekendRotation: undefined,
+      scheduleOverrides: member.scheduleOverrides || [],
+    };
+  }
+  return member;
+};
+
+const prepareAtsocTeamMembers = (members: TeamMember[]) =>
+  members.map((member) => {
+    const isKnownPartner = [
+      "partner-vinicius",
+      "partner-gabriel",
+      "partner-carlos",
+    ].includes(member.id);
+    const isOldGenericSchedule =
+      member.shiftStart === "08:00" &&
+      member.shiftEnd === "18:00" &&
+      (!member.weeklySchedule ||
+        member.weeklySchedule.every(
+          (shift) =>
+            !shift.enabled ||
+            (shift.start === "08:00" && shift.end === "18:00"),
+        ));
+    return isKnownPartner &&
+      (!member.scheduleMode || isOldGenericSchedule)
+      ? withAtsocPartnerSchedule(member)
+      : member;
+  });
+
 const INITIAL_TEAM_MEMBERS: TeamMember[] = [
   {
     id: "partner-vinicius",
@@ -284,7 +389,7 @@ const INITIAL_TEAM_MEMBERS: TeamMember[] = [
     shiftEnd: "18:00",
     cycleStart: "2026-08-31",
   },
-];
+].map(withAtsocPartnerSchedule);
 
 const INITIAL_CLIENT_RECORDS: ClientRecord[] = [
   {
@@ -4763,6 +4868,15 @@ function Team({
       scheduleMode: "weekly",
       weeklySchedule: defaultTeamWeeklySchedule("08:00", "18:00"),
       scheduleOverrides: [],
+      weekendRotation: {
+        enabled: false,
+        anchorDate: today,
+        firstWeekendDay: 6,
+        saturdayStart: "14:30",
+        saturdayEnd: "20:00",
+        sundayStart: "09:00",
+        sundayEnd: "15:00",
+      },
     });
   const removeMember = (member: TeamMember) => {
     if (!window.confirm(`Excluir ${member.name} da equipe?`)) return;
@@ -4771,10 +4885,28 @@ function Team({
   return (
     <>
       <Head title="Equipe" sub="Custos, produtividade e dimensionamento">
-        <Button onClick={addMember}>
-          <Plus />
-          Adicionar pessoa
-        </Button>
+        <div className="team-head-actions">
+          <Button
+            kind="ghost"
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Aplicar os horários informados para Vinicius, Gabriel e Carlos? As ocorrências já registradas serão mantidas.",
+                )
+              )
+                return;
+              setMembers((current) =>
+                current.map(withAtsocPartnerSchedule),
+              );
+            }}
+          >
+            <CalendarDays /> Aplicar escala dos sócios
+          </Button>
+          <Button onClick={addMember}>
+            <Plus />
+            Adicionar pessoa
+          </Button>
+        </div>
       </Head>
       <div className="metrics four">
         <Metric
@@ -5104,6 +5236,10 @@ function Team({
                         <input
                           type="checkbox"
                           checked={shift.enabled}
+                          disabled={
+                            Boolean(draft.weekendRotation?.enabled) &&
+                            (shift.day === 0 || shift.day === 6)
+                          }
                           onChange={(event) =>
                             setDraft({
                               ...draft,
@@ -5155,10 +5291,151 @@ function Team({
                           />
                         </div>
                       ) : (
-                        <span className="team-day-off">Folga habitual</span>
+                        <span className="team-day-off">
+                          {draft.weekendRotation?.enabled &&
+                          (shift.day === 0 || shift.day === 6)
+                            ? "Definido pelo revezamento"
+                            : "Folga habitual"}
+                        </span>
                       )}
                     </div>
                   ))}
+                </div>
+                <div className="team-weekend-rotation">
+                  <label className="team-rotation-toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.weekendRotation?.enabled)}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          weekendRotation: {
+                            enabled: event.target.checked,
+                            anchorDate:
+                              draft.weekendRotation?.anchorDate || today,
+                            firstWeekendDay:
+                              draft.weekendRotation?.firstWeekendDay ?? 6,
+                            saturdayStart:
+                              draft.weekendRotation?.saturdayStart || "14:30",
+                            saturdayEnd:
+                              draft.weekendRotation?.saturdayEnd || "20:00",
+                            sundayStart:
+                              draft.weekendRotation?.sundayStart || "09:00",
+                            sundayEnd:
+                              draft.weekendRotation?.sundayEnd || "15:00",
+                          },
+                        })
+                      }
+                    />
+                    <span>
+                      <b>Revezamento de sábado e domingo</b>
+                      <small>
+                        Quem trabalha no domingo folga no sábado; na semana seguinte, inverte automaticamente.
+                      </small>
+                    </span>
+                  </label>
+                  {draft.weekendRotation?.enabled && (
+                    <div className="team-rotation-fields">
+                      <label>
+                        Sábado do fim de semana inicial
+                        <input
+                          type="date"
+                          value={draft.weekendRotation.anchorDate}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                anchorDate: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Trabalha primeiro em
+                        <select
+                          value={draft.weekendRotation.firstWeekendDay}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                firstWeekendDay: +event.target.value as 0 | 6,
+                              },
+                            })
+                          }
+                        >
+                          <option value={6}>Sábado</option>
+                          <option value={0}>Domingo</option>
+                        </select>
+                      </label>
+                      <label>
+                        Sábado — entrada
+                        <input
+                          type="time"
+                          value={draft.weekendRotation.saturdayStart}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                saturdayStart: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Sábado — saída
+                        <input
+                          type="time"
+                          value={draft.weekendRotation.saturdayEnd}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                saturdayEnd: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Domingo — entrada
+                        <input
+                          type="time"
+                          value={draft.weekendRotation.sundayStart}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                sundayStart: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Domingo — saída
+                        <input
+                          type="time"
+                          value={draft.weekendRotation.sundayEnd}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              weekendRotation: {
+                                ...draft.weekendRotation!,
+                                sundayEnd: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -7747,7 +8024,11 @@ export default function Home() {
       );
       setFinancialEntries((data.financialEntries || []) as FinancialEntry[]);
       setRecurringRulesState((data.recurringRules || []) as RecurringAccountRule[]);
-      setTeamMembersState((data.teamMembers || INITIAL_TEAM_MEMBERS) as TeamMember[]);
+      setTeamMembersState(
+        prepareAtsocTeamMembers(
+          (data.teamMembers || INITIAL_TEAM_MEMBERS) as TeamMember[],
+        ),
+      );
       setClientRecords((data.clientRecords || INITIAL_CLIENT_RECORDS) as ClientRecord[]);
       setQuoteRecordsState((data.quoteRecords || []) as QuoteRecord[]);
       setScenarioRecordsState((data.scenarioRecords || []) as ScenarioRecord[]);

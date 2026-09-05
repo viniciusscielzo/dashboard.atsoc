@@ -408,6 +408,39 @@ test("ocorrência do dia prevalece sobre a escala e registra atestado ou extra",
   assert.equal(extra.extraShift, true);
   assert.equal(extra.start, "12:00");
 });
+test("revezamento alterna sábado e domingo sem escalar os dois", () => {
+  const base: TeamMember = {
+    id: "weekend-agent",
+    name: "Agente",
+    role: "Atendente",
+    kind: "collaborator",
+    cost: 3300,
+    hours: 176,
+    active: true,
+    operational: true,
+    shiftPattern: "5x2",
+    shiftStart: "08:00",
+    shiftEnd: "18:00",
+    cycleStart: "2026-08-31",
+    scheduleMode: "weekly",
+    weeklySchedule: defaultTeamWeeklySchedule(),
+    weekendRotation: {
+      enabled: true,
+      anchorDate: "2026-09-05",
+      firstWeekendDay: 6,
+      saturdayStart: "14:30",
+      saturdayEnd: "20:00",
+      sundayStart: "09:00",
+      sundayEnd: "15:00",
+    },
+  };
+  assert.equal(memberWorksOn(base, "2026-09-05"), true);
+  assert.equal(memberWorksOn(base, "2026-09-06"), false);
+  assert.equal(memberWorksOn(base, "2026-09-12"), false);
+  assert.equal(memberWorksOn(base, "2026-09-13"), true);
+  assert.equal(teamScheduleForDate(base, "2026-09-05").start, "14:30");
+  assert.equal(teamScheduleForDate(base, "2026-09-13").start, "09:00");
+});
 test("contratação em cenário entra como custo e nunca como receita", () => {
   const q = structuredClone(DEFAULT_PARAMETERS);
   q.availableOperationalFte = 1;
