@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   attachQuoteToCrmLead,
+  crmActionStatus,
   crmMetrics,
+  DEFAULT_CRM_COLUMNS,
   filterCrmLeads,
   nextCrmStage,
+  normalizeCrmColumns,
   restartCrmFollowUp,
   type CrmLead,
 } from "../lib/crm";
@@ -29,6 +32,21 @@ test("pipeline avança na ordem e para na negociação", () => {
   assert.equal(nextCrmStage("prospecting"), "contacted");
   assert.equal(nextCrmStage("proposal"), "negotiation");
   assert.equal(nextCrmStage("negotiation"), null);
+});
+
+test("pipeline personalizado avança sem alterar os leads existentes", () => {
+  const stages = [...DEFAULT_CRM_COLUMNS.map((column) => column.id), "custom-reuniao"];
+  assert.equal(nextCrmStage("negotiation", stages), "custom-reuniao");
+  assert.equal(nextCrmStage("custom-reuniao", stages), null);
+  assert.equal(normalizeCrmColumns(undefined).length, DEFAULT_CRM_COLUMNS.length);
+});
+
+test("agenda separa ações atrasadas, de hoje e futuras", () => {
+  const now = new Date("2026-09-05T15:00:00Z");
+  assert.equal(crmActionStatus("2026-09-04", now), "overdue");
+  assert.equal(crmActionStatus("2026-09-05", now), "today");
+  assert.equal(crmActionStatus("2026-09-06", now), "upcoming");
+  assert.equal(crmActionStatus("", now), "unscheduled");
 });
 
 test("cotar não é uma transição de etapa do pipeline", () => {

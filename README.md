@@ -37,7 +37,9 @@ Não limpe os dados do site no navegador. Trocar o domínio, usar outro navegado
 O menu **CRM Comercial** possui:
 
 - indicadores para hoje, 7, 15, 30 e 90 dias;
-- pipeline de Prospecção até Negociação;
+- pipeline de Prospecção até Negociação, com criação de colunas personalizadas;
+- tags manuais e alertas automáticos de ação atrasada, ação de hoje e cotação vinculada;
+- agenda de próximas ações separada em atrasadas, hoje, futuras e sem data;
 - origem e etapa selecionáveis;
 - responsável automático Vinicius Scielzo;
 - botão para avançar o lead;
@@ -45,6 +47,10 @@ O menu **CRM Comercial** possui:
 - conversão da negociação em cliente e recebimentos mensais;
 - registro de oportunidades perdidas com motivo;
 - históricos separados de ganhos e perdas.
+
+A atualização do CRM é compatível com registros anteriores. O sistema mantém os
+leads já existentes e acrescenta apenas os novos campos opcionais de tags e
+configuração das colunas.
 
 Ao converter um lead, complete os horários contratados em **Clientes e Contratos** para que o FTE e a capacidade sejam calculados corretamente.
 

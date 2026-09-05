@@ -130,7 +130,10 @@ body {
   gap: 14px;
   margin-bottom: 14px;
 }
+.crm-head-actions { display: flex; align-items: center; gap: 9px; }
 .crm-periods { margin: 0; }
+.crm-actions-period { display: inline-flex; align-items: center; gap: 5px; }
+.crm-actions-period svg { width: 13px; height: 13px; }
 .crm-search {
   min-width: 250px;
   height: 39px;
@@ -170,7 +173,12 @@ body {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .04em;
+  border-top: 3px solid transparent;
 }
+.crm-column-tools { display: flex; align-items: center; gap: 5px; }
+.crm-column-tools button { width: 23px; height: 23px; display: grid; place-items: center; border: 0; border-radius: 6px; color: #8294ac; background: transparent; cursor: pointer; }
+.crm-column-tools button:hover { color: #70aefb; background: #2679df20; }
+.crm-column-tools svg { width: 12px; }
 .crm-column > header b {
   min-width: 23px;
   height: 23px;
@@ -214,6 +222,13 @@ body {
 .crm-card h3 { margin: 11px 0 3px; font-size: 14px; }
 .crm-card p { margin: 0 0 10px; color: var(--muted); font-size: 10px; }
 .crm-card > strong { display: block; color: #65ddb5; font-size: 13px; margin-bottom: 11px; }
+.crm-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: -3px 0 9px; }
+.crm-card-tags span, .crm-stage-tag { display: inline-flex; align-items: center; gap: 4px; width: max-content; padding: 4px 7px; border: 1px solid #365173; border-radius: 999px; color: #b9cbe1; background: #14233a; font-size: 8px; font-weight: 800; }
+.crm-card-tags svg { width: 10px; height: 10px; }
+.crm-card-tags.automatic { margin-top: 0; }
+.crm-card-tags .overdue { color: #ff9cab; border-color: #8d3544; background: #3a1520; }
+.crm-card-tags .today { color: #ffd17d; border-color: #7f5e23; background: #30240f; }
+.crm-card-tags .quoted { color: #83c0ff; border-color: #285482; background: #10233b; }
 .crm-card > small { display: flex; align-items: center; gap: 6px; color: #8797ab; font-size: 9px; }
 .crm-card > small svg { width: 13px; }
 .crm-quote-chip { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; padding: 7px; border: 1px solid #285482; border-radius: 8px; background: #10233b; color: #a9cfff; }
@@ -267,6 +282,31 @@ body {
 .crm-decision p { margin: 0 0 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .crm-decision label { display: flex; flex-direction: column; gap: 7px; color: #9eacc0; font-size: 10px; font-weight: 700; }
 .crm-decision .btn { margin-top: 11px; }
+.crm-column-modal { max-width: 430px; }
+.crm-column-modal > label { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; color: #9eacc0; font-size: 11px; font-weight: 700; }
+.crm-color-field { height: 42px; display: flex; align-items: center; gap: 10px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: #0a1425; }
+.crm-color-field input { width: 46px; height: 29px; padding: 0; border: 0; background: transparent; }
+.crm-color-field span { color: var(--muted); font-family: monospace; }
+.crm-column-warning { color: #ff9cab; font-size: 10px; }
+.btn.danger { margin-right: auto; color: #ff8493; border-color: #7d3040; background: #33131b; }
+.btn.danger:disabled { opacity: .45; cursor: not-allowed; }
+.crm-actions-view { padding: 0; overflow: hidden; }
+.crm-actions-view > .panel-title { padding: 16px 18px; margin: 0; }
+.crm-action-group { border-top: 1px solid var(--line); }
+.crm-action-group > header { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; background: #0a1425; }
+.crm-action-group > header span { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.crm-action-group > header svg { width: 15px; color: var(--red); }
+.crm-action-group > header b { min-width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; color: #8fc2ff; background: #2679df22; }
+.crm-action-group.overdue > header { background: #2b1118; color: #ff98a7; }
+.crm-action-group.today > header { background: #29210f; color: #ffd17d; }
+.crm-action-group article { display: grid; grid-template-columns: minmax(180px, 1fr) 130px 120px 210px; gap: 12px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--line); }
+.crm-action-group article > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.crm-action-group article small, .crm-action-group article > span { color: var(--muted); font-size: 10px; }
+.crm-stage-tag { color: var(--stage-color); border-color: color-mix(in srgb, var(--stage-color) 48%, transparent); background: color-mix(in srgb, var(--stage-color) 13%, transparent); }
+.crm-action-row-buttons { display: flex; justify-content: flex-end; gap: 6px; }
+.crm-action-row-buttons button { min-height: 30px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #284666; border-radius: 7px; color: #a9cfff; background: #10233b; cursor: pointer; font-size: 9px; font-weight: 700; }
+.crm-action-row-buttons svg { width: 12px; }
+.crm-action-empty { margin: 0; padding: 13px 18px; color: #66778d; font-size: 10px; }
 .shell.light .crm-search,
 .shell.light .crm-column,
 .shell.light .crm-card { background: linear-gradient(145deg, #ffffff, #f5f8fe); border-color: #cbd9e8; }
@@ -277,12 +317,23 @@ body {
 .shell.light .crm-card-actions button.advance { color: white; background: linear-gradient(90deg, #277add, #6751df); }
 .shell.light .crm-decision.win { background: #effaf6; border-color: #b9dfd1; }
 .shell.light .crm-decision.loss { background: #fff4f6; border-color: #efc8cf; }
+.shell.light .crm-card-tags span { color: #425b7a; border-color: #c4d4e7; background: #edf4fc; }
+.shell.light .crm-card-tags .overdue { color: #b52e44; border-color: #efb5bf; background: #fff0f2; }
+.shell.light .crm-card-tags .today { color: #986611; border-color: #ead099; background: #fff8e8; }
+.shell.light .crm-card-tags .quoted { color: #2864a8; border-color: #c3d7ee; background: #edf5ff; }
+.shell.light .crm-action-group > header, .shell.light .crm-color-field { background: #edf4fc; }
+.shell.light .crm-action-group.overdue > header { background: #fff0f2; color: #b52e44; }
+.shell.light .crm-action-group.today > header { background: #fff8e8; color: #986611; }
+.shell.light .crm-action-row-buttons button { color: #2864a8; border-color: #c3d7ee; background: #edf5ff; }
 @media (max-width: 900px) {
   .crm-toolbar { align-items: stretch; flex-direction: column; }
   .crm-search { min-width: 0; }
   .crm-periods { overflow-x: auto; }
   .crm-list article { grid-template-columns: 1fr 110px; }
   .crm-list article > :nth-child(3), .crm-list article > :nth-child(4) { display: none; }
+  .crm-head-actions { align-items: stretch; flex-direction: column-reverse; }
+  .crm-action-group article { grid-template-columns: 1fr 110px; }
+  .crm-action-group article > :nth-child(3) { display: none; }
 }
 .fatal-error { min-height: 100vh; display: grid; place-items: center; padding: 30px; background: #060b18; color: white; }
 .fatal-error > div { max-width: 560px; padding: 36px; border: 1px solid #263a56; border-radius: 20px; background: #0d1729; }

@@ -69,7 +69,7 @@ declare
 begin
   if resource_name not in (
     'parameters','financialEntries','recurringRules','teamMembers',
-    'clientRecords','quoteRecords','scenarioRecords','companyLogo',
+    'clientRecords','quoteRecords','scenarioRecords','crmLeads','crmColumns','companyLogo',
     'initialBalance','approvalRequests','discountAudit'
   ) then
     raise exception 'Recurso não permitido';

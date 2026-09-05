@@ -9,6 +9,8 @@ const RESOURCES = new Set([
   "clientRecords",
   "quoteRecords",
   "scenarioRecords",
+  "crmLeads",
+  "crmColumns",
   "companyLogo",
   "initialBalance",
   "approvalRequests",

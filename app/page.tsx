@@ -93,7 +93,13 @@ import {
 import { buildAtsocReports, type ReportDataset } from "@/lib/atsoc-reports";
 import { exportReportExcel, exportReportPdf } from "@/lib/report-export";
 import { Crm } from "@/components/crm";
-import { attachQuoteToCrmLead, type CrmLead } from "@/lib/crm";
+import {
+  attachQuoteToCrmLead,
+  DEFAULT_CRM_COLUMNS,
+  normalizeCrmColumns,
+  type CrmColumn,
+  type CrmLead,
+} from "@/lib/crm";
 import {
   initializeWorkspace,
   loadWorkspace,
@@ -7315,6 +7321,7 @@ export default function Home() {
     [quoteRecords, setQuoteRecordsState] = useState<QuoteRecord[]>([]),
     [scenarioRecords, setScenarioRecordsState] = useState<ScenarioRecord[]>([]),
     [crmLeads, setCrmLeadsState] = useState<CrmLead[]>([]),
+    [crmColumns, setCrmColumnsState] = useState<CrmColumn[]>(DEFAULT_CRM_COLUMNS),
     [companyLogo, setCompanyLogoState] = useState(""),
     [initialBalance, setInitialBalanceState] = useState(0),
     [searchQuery, setSearchQuery] = useState(""),
@@ -7358,7 +7365,8 @@ export default function Home() {
       setClientRecords((data.clientRecords || INITIAL_CLIENT_RECORDS) as ClientRecord[]);
       setQuoteRecordsState((data.quoteRecords || []) as QuoteRecord[]);
       setScenarioRecordsState((data.scenarioRecords || []) as ScenarioRecord[]);
-      setCrmLeadsState((data.crmLeads || []) as CrmLead[]);
+      setCrmLeadsState(((data.crmLeads || []) as CrmLead[]).map((lead) => ({ ...lead, tags: Array.isArray(lead.tags) ? lead.tags : [] })));
+      setCrmColumnsState(normalizeCrmColumns(data.crmColumns));
       setCompanyLogoState(typeof data.companyLogo === "string" ? data.companyLogo : "");
       setInitialBalanceState(Number(data.initialBalance) || 0);
     };
@@ -7379,6 +7387,7 @@ export default function Home() {
             quoteRecords: [],
             scenarioRecords: [],
             crmLeads: [],
+            crmColumns: DEFAULT_CRM_COLUMNS,
             companyLogo: "",
             initialBalance: 0,
             approvalRequests: [],
@@ -7574,6 +7583,14 @@ export default function Home() {
       persist("crmLeads", next);
       return next;
     });
+  const updateCrmColumns = (
+    updater: CrmColumn[] | ((current: CrmColumn[]) => CrmColumn[]),
+  ) =>
+    setCrmColumnsState((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      persist("crmColumns", next);
+      return next;
+    });
   const toggleTheme = () =>
     setTheme((t) => {
       const next = t === "dark" ? "light" : "dark";
@@ -7714,8 +7731,10 @@ export default function Home() {
         crm: (
           <Crm
             leads={crmLeads}
+            columns={crmColumns}
             quotes={quoteRecords}
             setLeads={updateCrmLeads}
+            setColumns={updateCrmColumns}
             openPricing={(lead) => {
               sessionStorage.setItem("atsoc-crm-pricing-lead", JSON.stringify(lead));
               goTo("pricing");
@@ -7785,6 +7804,7 @@ export default function Home() {
       quoteRecords,
       scenarioRecords,
       crmLeads,
+      crmColumns,
       companyLogo,
     ],
   );

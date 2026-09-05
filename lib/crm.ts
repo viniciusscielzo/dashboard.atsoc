@@ -1,4 +1,4 @@
-export type CrmStage =
+export type CrmBuiltinStage =
   | "prospecting"
   | "contacted"
   | "qualified"
@@ -6,6 +6,15 @@ export type CrmStage =
   | "negotiation"
   | "won"
   | "lost";
+
+export type CrmStage = CrmBuiltinStage | (string & {});
+
+export type CrmColumn = {
+  id: string;
+  label: string;
+  color: string;
+  system?: boolean;
+};
 
 export type CrmPeriod = "Hoje" | "7 dias" | "15 dias" | "30 dias" | "90 dias" | "Tudo";
 
@@ -25,6 +34,7 @@ export type CrmLead = {
   updatedAt: string;
   lossReason?: string;
   convertedClientId?: string;
+  tags?: string[];
 };
 
 export type CrmQuoteSummary = {
@@ -36,7 +46,7 @@ export type CrmQuoteSummary = {
   date: string;
 };
 
-export const CRM_ACTIVE_STAGES: CrmStage[] = [
+export const CRM_ACTIVE_STAGES: CrmBuiltinStage[] = [
   "prospecting",
   "contacted",
   "qualified",
@@ -44,7 +54,15 @@ export const CRM_ACTIVE_STAGES: CrmStage[] = [
   "negotiation",
 ];
 
-export const CRM_STAGE_LABELS: Record<CrmStage, string> = {
+export const DEFAULT_CRM_COLUMNS: CrmColumn[] = [
+  { id: "prospecting", label: "Prospecção", color: "#4b9cff", system: true },
+  { id: "contacted", label: "Contato feito", color: "#51c8e8", system: true },
+  { id: "qualified", label: "Qualificado", color: "#8b72f6", system: true },
+  { id: "proposal", label: "Proposta", color: "#f2cf52", system: true },
+  { id: "negotiation", label: "Negociação", color: "#2bd39b", system: true },
+];
+
+export const CRM_STAGE_LABELS: Record<CrmBuiltinStage, string> = {
   prospecting: "Prospecção",
   contacted: "Contato feito",
   qualified: "Qualificado",
@@ -53,6 +71,27 @@ export const CRM_STAGE_LABELS: Record<CrmStage, string> = {
   won: "Cliente ganho",
   lost: "Perdido",
 };
+
+export function crmStageLabel(stage: CrmStage, columns: CrmColumn[] = DEFAULT_CRM_COLUMNS) {
+  return columns.find((column) => column.id === stage)?.label
+    || CRM_STAGE_LABELS[stage as CrmBuiltinStage]
+    || stage;
+}
+
+export function normalizeCrmColumns(value: unknown): CrmColumn[] {
+  if (!Array.isArray(value)) return DEFAULT_CRM_COLUMNS.map((column) => ({ ...column }));
+  const custom = value.filter((item): item is CrmColumn => Boolean(
+    item && typeof item === "object" && typeof item.id === "string"
+      && typeof item.label === "string" && typeof item.color === "string",
+  ));
+  const merged = DEFAULT_CRM_COLUMNS.map((fallback) =>
+    custom.find((column) => column.id === fallback.id) || { ...fallback },
+  );
+  for (const column of custom) {
+    if (!merged.some((item) => item.id === column.id)) merged.push(column);
+  }
+  return merged;
+}
 
 export const CRM_ORIGINS = [
   "Prospecção ativa",
@@ -67,10 +106,29 @@ export const CRM_ORIGINS = [
 
 export const CRM_PERIODS: CrmPeriod[] = ["Hoje", "7 dias", "15 dias", "30 dias", "90 dias", "Tudo"];
 
-export function nextCrmStage(stage: CrmStage): CrmStage | null {
-  const index = CRM_ACTIVE_STAGES.indexOf(stage);
-  if (index < 0 || index === CRM_ACTIVE_STAGES.length - 1) return null;
-  return CRM_ACTIVE_STAGES[index + 1];
+export function nextCrmStage(stage: CrmStage, stages: CrmStage[] = CRM_ACTIVE_STAGES): CrmStage | null {
+  const index = stages.indexOf(stage);
+  if (index < 0 || index === stages.length - 1) return null;
+  return stages[index + 1];
+}
+
+export type CrmActionStatus = "overdue" | "today" | "upcoming" | "unscheduled";
+
+export function crmActionStatus(nextActionDate: string, now = new Date()): CrmActionStatus {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextActionDate)) return "unscheduled";
+  const actionDay = saoPauloCalendarDay(new Date(`${nextActionDate}T12:00:00-03:00`));
+  const today = saoPauloCalendarDay(now);
+  if (actionDay < today) return "overdue";
+  if (actionDay === today) return "today";
+  return "upcoming";
+}
+
+export function sortCrmActions(leads: CrmLead[]) {
+  return [...leads].sort((a, b) => {
+    if (!a.nextActionDate) return 1;
+    if (!b.nextActionDate) return -1;
+    return a.nextActionDate.localeCompare(b.nextActionDate);
+  });
 }
 
 export function attachQuoteToCrmLead(lead: CrmLead, estimatedValue: number, updatedAt = new Date().toISOString()): CrmLead {
@@ -113,9 +171,14 @@ export function filterCrmLeads(leads: CrmLead[], period: CrmPeriod, now = new Da
   });
 }
 
-export function crmMetrics(leads: CrmLead[], period: CrmPeriod, now = new Date()) {
+export function crmMetrics(
+  leads: CrmLead[],
+  period: CrmPeriod,
+  now = new Date(),
+  activeStages: CrmStage[] = CRM_ACTIVE_STAGES,
+) {
   const filtered = filterCrmLeads(leads, period, now);
-  const active = filtered.filter((lead) => CRM_ACTIVE_STAGES.includes(lead.stage));
+  const active = filtered.filter((lead) => activeStages.includes(lead.stage));
   const won = filtered.filter((lead) => lead.stage === "won");
   const lost = filtered.filter((lead) => lead.stage === "lost");
   const decisions = won.length + lost.length;

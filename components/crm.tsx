@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
+  AlertTriangle,
   ArrowUpRight,
   Building2,
   CalendarDays,
@@ -11,6 +12,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Tag,
   Target,
   Trash2,
   TrendingUp,
@@ -18,14 +20,16 @@ import {
   X,
 } from "lucide-react";
 import {
-  CRM_ACTIVE_STAGES,
   CRM_ORIGINS,
   CRM_PERIODS,
-  CRM_STAGE_LABELS,
+  crmActionStatus,
   crmMetrics,
+  crmStageLabel,
   filterCrmLeads,
   nextCrmStage,
   restartCrmFollowUp,
+  sortCrmActions,
+  type CrmColumn,
   type CrmLead,
   type CrmPeriod,
   type CrmQuoteSummary,
@@ -64,21 +68,27 @@ const blankLead = (): CrmLead => ({
 
 export function Crm({
   leads,
+  columns,
   quotes,
   setLeads,
+  setColumns,
   openPricing,
   convertToClient,
 }: {
   leads: CrmLead[];
+  columns: CrmColumn[];
   quotes: CrmQuoteSummary[];
   setLeads: (updater: CrmLead[] | ((current: CrmLead[]) => CrmLead[])) => void;
+  setColumns: (updater: CrmColumn[] | ((current: CrmColumn[]) => CrmColumn[])) => void;
   openPricing: (lead: CrmLead) => void;
   convertToClient: (lead: CrmLead, data: ConversionData) => string;
 }) {
   const [period, setPeriod] = useState<CrmPeriod>("30 dias");
+  const [actionMode, setActionMode] = useState(false);
   const [view, setView] = useState<"active" | "won" | "lost">("active");
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<CrmLead | null>(null);
+  const [tagText, setTagText] = useState("");
   const [decision, setDecision] = useState<CrmLead | null>(null);
   const [lossReason, setLossReason] = useState("");
   const [conversion, setConversion] = useState<ConversionData>({
@@ -88,18 +98,26 @@ export function Crm({
     contractStart: localDate(),
   });
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+  const [columnEditor, setColumnEditor] = useState<CrmColumn | null>(null);
 
-  const metrics = useMemo(() => crmMetrics(leads, period), [leads, period]);
+  const activeStages = useMemo(() => columns.map((column) => column.id), [columns]);
+
+  const metrics = useMemo(() => crmMetrics(leads, period, new Date(), activeStages), [activeStages, leads, period]);
   const visible = useMemo(() => {
     const periodLeads = filterCrmLeads(leads, period);
     const byView = periodLeads.filter((lead) =>
-      view === "active" ? CRM_ACTIVE_STAGES.includes(lead.stage) : lead.stage === view,
+      view === "active" ? activeStages.includes(lead.stage) : lead.stage === view,
     );
     const term = query.trim().toLowerCase();
     return term
       ? byView.filter((lead) => `${lead.company} ${lead.contact} ${lead.phone}`.toLowerCase().includes(term))
       : byView;
-  }, [leads, period, query, view]);
+  }, [activeStages, leads, period, query, view]);
+  const actionLeads = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return sortCrmActions(leads.filter((lead) => activeStages.includes(lead.stage) || lead.stage === "lost"))
+      .filter((lead) => !term || `${lead.company} ${lead.contact} ${lead.phone}`.toLowerCase().includes(term));
+  }, [activeStages, leads, query]);
   const quotesByLead = useMemo(() => {
     const result = new Map<string, CrmQuoteSummary[]>();
     for (const lead of leads) {
@@ -119,6 +137,7 @@ export function Crm({
       id: editor.id || `lead-${Date.now()}`,
       company: editor.company.trim(),
       owner: "Vinicius Scielzo",
+      tags: tagText.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 8),
       createdAt: editor.createdAt || now,
       updatedAt: now,
     };
@@ -128,8 +147,18 @@ export function Crm({
     setEditor(null);
   };
 
+  const editLead = (lead: CrmLead) => {
+    setTagText((lead.tags || []).join(", "));
+    setEditor({ ...lead });
+  };
+
+  const createLead = () => {
+    setTagText("");
+    setEditor(blankLead());
+  };
+
   const advance = (lead: CrmLead) => {
-    const next = nextCrmStage(lead.stage);
+    const next = nextCrmStage(lead.stage, activeStages);
     if (!next) {
       setDecision(lead);
       setConversion({
@@ -147,12 +176,31 @@ export function Crm({
   };
 
   const moveToStage = (leadId: string, stage: CrmLead["stage"]) => {
-    if (!CRM_ACTIVE_STAGES.includes(stage)) return;
+    if (!activeStages.includes(stage)) return;
     setLeads((current) => current.map((lead) =>
-      lead.id === leadId && CRM_ACTIVE_STAGES.includes(lead.stage) && lead.stage !== stage
+      lead.id === leadId && activeStages.includes(lead.stage) && lead.stage !== stage
         ? { ...lead, stage, updatedAt: new Date().toISOString() }
         : lead,
     ));
+  };
+
+  const saveColumn = () => {
+    if (!columnEditor?.label.trim()) return;
+    if (columnEditor.id) {
+      setColumns((current) => current.map((column) => column.id === columnEditor.id
+        ? { ...column, label: columnEditor.label.trim(), color: columnEditor.color }
+        : column));
+    } else {
+      const id = `custom-${Date.now()}`;
+      setColumns((current) => [...current, { ...columnEditor, id, label: columnEditor.label.trim(), system: false }]);
+    }
+    setColumnEditor(null);
+  };
+
+  const deleteColumn = (column: CrmColumn) => {
+    if (column.system || leads.some((lead) => lead.stage === column.id)) return;
+    setColumns((current) => current.filter((item) => item.id !== column.id));
+    setColumnEditor(null);
   };
 
   const restartFollowUp = (lead: CrmLead) => {
@@ -185,12 +233,16 @@ export function Crm({
     <>
       <div className="section-head">
         <div><h2>CRM Comercial</h2><p>Prospecção e fechamento em um fluxo simples</p></div>
-        <button className="btn primary" onClick={() => setEditor(blankLead())}><Plus /> Novo lead</button>
+        <div className="crm-head-actions">
+          <button className="btn ghost" onClick={() => setColumnEditor({ id: "", label: "", color: "#4b9cff", system: false })}><Plus /> Nova coluna</button>
+          <button className="btn primary" onClick={createLead}><Plus /> Novo lead</button>
+        </div>
       </div>
 
       <div className="crm-toolbar">
         <div className="segmented crm-periods">
-          {CRM_PERIODS.map((item) => <button key={item} className={period === item ? "active" : ""} onClick={() => setPeriod(item)}>{item}</button>)}
+          {CRM_PERIODS.map((item) => <button key={item} className={!actionMode && period === item ? "active" : ""} onClick={() => { setPeriod(item); setActionMode(false); }}>{item}</button>)}
+          <button className={actionMode ? "active crm-actions-period" : "crm-actions-period"} onClick={() => setActionMode(true)}><CalendarDays /> Próximas ações</button>
         </div>
         <label className="crm-search"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar lead..." /></label>
       </div>
@@ -202,15 +254,34 @@ export function Crm({
         <article className="metric"><span className="metric-icon blue"><TrendingUp /></span><div><small>Conversão</small><strong>{(metrics.conversion * 100).toFixed(1)}%</strong><em>Ganhos sobre decisões</em></div></article>
       </div>
 
-      <div className="tabs crm-tabs">
+      {!actionMode && <div className="tabs crm-tabs">
         <button className={view === "active" ? "active" : ""} onClick={() => setView("active")}>Pipeline</button>
         <button className={view === "won" ? "active" : ""} onClick={() => setView("won")}>Ganhos</button>
         <button className={view === "lost" ? "active" : ""} onClick={() => setView("lost")}>Follow-up</button>
-      </div>
+      </div>}
 
-      {view === "active" ? (
+      {actionMode ? (
+        <section className="panel crm-actions-view">
+          <div className="panel-title"><div><h3>Agenda de próximas ações</h3><p>Atrasos aparecem primeiro; depois, compromissos de hoje e futuros.</p></div></div>
+          {(["overdue", "today", "upcoming", "unscheduled"] as const).map((status) => {
+            const items = actionLeads.filter((lead) => crmActionStatus(lead.nextActionDate) === status);
+            const labels = { overdue: "Atrasadas", today: "Hoje", upcoming: "Próximas", unscheduled: "Sem data" };
+            return <div className={`crm-action-group ${status}`} key={status}>
+              <header><span>{status === "overdue" && <AlertTriangle />}{labels[status]}</span><b>{items.length}</b></header>
+              {items.map((lead) => <article key={lead.id}>
+                <div><strong>{lead.company}</strong><small>{lead.contact || "Contato não informado"}</small></div>
+                <span className="crm-stage-tag" style={{ "--stage-color": columns.find((column) => column.id === lead.stage)?.color || (lead.stage === "lost" ? "#ff6577" : "#4b9cff") } as CSSProperties}>{lead.stage === "lost" ? "Follow-up" : crmStageLabel(lead.stage, columns)}</span>
+                <span>{lead.nextActionDate ? new Date(`${lead.nextActionDate}T12:00:00`).toLocaleDateString("pt-BR") : "Definir data"}</span>
+                <div className="crm-action-row-buttons"><button onClick={() => editLead(lead)}><Pencil /> Editar</button>{lead.stage === "lost" ? <button onClick={() => restartFollowUp(lead)}><RotateCcw /> Retomar</button> : <button onClick={() => advance(lead)}>Avançar <ArrowUpRight /></button>}</div>
+              </article>)}
+              {!items.length && <p className="crm-action-empty">Nenhuma ação nesta categoria.</p>}
+            </div>;
+          })}
+        </section>
+      ) : view === "active" ? (
         <div className="crm-board">
-          {CRM_ACTIVE_STAGES.map((stage) => {
+          {columns.map((column) => {
+            const stage = column.id;
             const stageLeads = visible.filter((lead) => lead.stage === stage);
             return <section
               className={`crm-column${draggedLeadId ? " drag-active" : ""}`}
@@ -221,7 +292,7 @@ export function Crm({
                 setDraggedLeadId(null);
               }}
             >
-              <header><span>{CRM_STAGE_LABELS[stage]}</span><b>{stageLeads.length}</b></header>
+              <header style={{ borderTopColor: column.color }}><span>{column.label}</span><div className="crm-column-tools"><b>{stageLeads.length}</b>{!column.system && <button onClick={() => setColumnEditor({ ...column })} title="Editar coluna"><Pencil /></button>}</div></header>
               <div className="crm-column-body">
                 {stageLeads.map((lead) => {
                   const leadQuotes = quotesByLead.get(lead.id) || [];
@@ -233,18 +304,24 @@ export function Crm({
                     onDragStart={() => setDraggedLeadId(lead.id)}
                     onDragEnd={() => setDraggedLeadId(null)}
                   >
-                  <div className="crm-card-head"><span>{lead.origin}</span><div><button onClick={() => setEditor({ ...lead })} title="Editar"><Pencil /></button><button onClick={() => setLeads((current) => current.filter((item) => item.id !== lead.id))} title="Excluir"><Trash2 /></button></div></div>
+                  <div className="crm-card-head"><span>{lead.origin}</span><div><button onClick={() => editLead(lead)} title="Editar"><Pencil /></button><button onClick={() => setLeads((current) => current.filter((item) => item.id !== lead.id))} title="Excluir"><Trash2 /></button></div></div>
                   <h3>{lead.company}</h3>
                   <p>{lead.contact || "Contato ainda não informado"}</p>
                   <strong>{lead.estimatedValue > 0 ? `${brl(lead.estimatedValue)}/mês` : "Valor a definir"}</strong>
+                  {!!lead.tags?.length && <div className="crm-card-tags">{lead.tags.map((item) => <span key={item}><Tag />{item}</span>)}</div>}
+                  <div className="crm-card-tags automatic">
+                    {crmActionStatus(lead.nextActionDate) === "overdue" && <span className="overdue"><AlertTriangle />Ação atrasada</span>}
+                    {crmActionStatus(lead.nextActionDate) === "today" && <span className="today"><CalendarDays />Ação hoje</span>}
+                    {latestQuote && <span className="quoted"><Calculator />Cotado</span>}
+                  </div>
                   {latestQuote && <div className="crm-quote-chip">
                     <Calculator />
                     <span><b>Última cotação: {brl(latestQuote.negotiatedPrice)}</b><small>{leadQuotes.length} cotação(ões) vinculada(s)</small></span>
                   </div>}
-                  <small><CalendarDays /> Próxima ação: {new Date(`${lead.nextActionDate}T12:00:00`).toLocaleDateString("pt-BR")}</small>
+                  <small><CalendarDays /> Próxima ação: {lead.nextActionDate ? new Date(`${lead.nextActionDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não agendada"}</small>
                   <div className="crm-card-actions">
                     <button onClick={() => openPricing(lead)}><Calculator /> Cotar</button>
-                    <button className="advance" onClick={() => advance(lead)}>{stage === "negotiation" ? "Decidir" : "Avançar"}<ArrowUpRight /></button>
+                    <button className="advance" onClick={() => advance(lead)}>{stage === activeStages[activeStages.length - 1] ? "Decidir" : "Avançar"}<ArrowUpRight /></button>
                   </div>
                 </article>})}
                 {!stageLeads.length && <div className="crm-column-empty">Nenhum lead</div>}
@@ -262,7 +339,7 @@ export function Crm({
             <em>{view === "lost" ? lead.lossReason : "Convertido em cliente"}</em>
             {view === "lost"
               ? <button className="crm-restart" title="Voltar ao início do follow-up" onClick={() => restartFollowUp(lead)}><RotateCcw /></button>
-              : <button onClick={() => setEditor({ ...lead })}><Pencil /></button>}
+              : <button onClick={() => editLead(lead)}><Pencil /></button>}
           </article>)}
           {!visible.length && <div className="crm-list-empty">Nenhum registro neste período.</div>}
         </section>
@@ -276,13 +353,26 @@ export function Crm({
           <label>Telefone / WhatsApp<input value={editor.phone} onChange={(event) => setEditor({ ...editor, phone: event.target.value })} /></label>
           <label>E-mail<input type="email" value={editor.email} onChange={(event) => setEditor({ ...editor, email: event.target.value })} /></label>
           <label>Origem<select value={editor.origin} onChange={(event) => setEditor({ ...editor, origin: event.target.value })}>{CRM_ORIGINS.map((origin) => <option key={origin}>{origin}</option>)}</select></label>
-          <label>Etapa atual<div className="crm-stage-readonly">{CRM_STAGE_LABELS[editor.stage]}<small>Altere pelo botão Avançar ou arrastando o card.</small></div></label>
+          <label>Etapa atual<div className="crm-stage-readonly">{crmStageLabel(editor.stage, columns)}<small>Altere pelo botão Avançar ou arrastando o card.</small></div></label>
           <label>Valor mensal estimado<input type="number" min="0" value={editor.estimatedValue} onChange={(event) => setEditor({ ...editor, estimatedValue: Number(event.target.value) || 0 })} /></label>
           <label>Próxima ação<input type="date" value={editor.nextActionDate} onChange={(event) => setEditor({ ...editor, nextActionDate: event.target.value })} /></label>
+          <label className="full-field">Tags do card<input value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="Ex.: prioridade, indicação, retorno" /><small>Separe as tags por vírgulas.</small></label>
         </div>
         <label>Observações<textarea value={editor.notes} onChange={(event) => setEditor({ ...editor, notes: event.target.value })} placeholder="Contexto da conversa e próximo passo" /></label>
         <div className="crm-owner"><Users /> Responsável automático: <b>Vinicius Scielzo</b></div>
         <div className="modal-actions"><button className="btn ghost" onClick={() => setEditor(null)}>Cancelar</button><button className="btn primary" onClick={saveLead}><Check /> Salvar lead</button></div>
+      </div></div>}
+
+      {columnEditor && <div className="modal-bg"><div className="modal crm-column-modal">
+        <div className="modal-head"><div><small>PIPELINE PERSONALIZÁVEL</small><h3>{columnEditor.id ? "Editar coluna" : "Nova coluna"}</h3></div><button className="icon" onClick={() => setColumnEditor(null)}><X /></button></div>
+        <label>Nome da coluna<input value={columnEditor.label} onChange={(event) => setColumnEditor({ ...columnEditor, label: event.target.value })} placeholder="Ex.: Reunião agendada" autoFocus /></label>
+        <label>Cor da coluna<div className="crm-color-field"><input type="color" value={columnEditor.color} onChange={(event) => setColumnEditor({ ...columnEditor, color: event.target.value })} /><span>{columnEditor.color}</span></div></label>
+        {columnEditor.id && !columnEditor.system && leads.some((lead) => lead.stage === columnEditor.id) && <p className="crm-column-warning">Para excluir esta coluna, mova primeiro os leads que estão nela.</p>}
+        <div className="modal-actions">
+          {columnEditor.id && !columnEditor.system && <button className="btn danger" disabled={leads.some((lead) => lead.stage === columnEditor.id)} onClick={() => deleteColumn(columnEditor)}><Trash2 /> Excluir coluna</button>}
+          <button className="btn ghost" onClick={() => setColumnEditor(null)}>Cancelar</button>
+          <button className="btn primary" onClick={saveColumn}><Check /> Salvar coluna</button>
+        </div>
       </div></div>}
 
       {decision && <div className="modal-bg"><div className="modal crm-modal">
